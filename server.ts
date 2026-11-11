@@ -2,8 +2,17 @@ import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import fs from 'fs';
+import dns from 'dns';
+import https from 'https';
 import dotenv from 'dotenv';
 import WebSocket from 'ws';
+
+// Ensure IPv4 is preferred inside Docker containers (resolves 'fetch failed' IPv6 routing issues on VPS)
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  // Ignore fallback
+}
 
 dotenv.config();
 
@@ -1085,7 +1094,55 @@ async function startServer() {
     }
   });
 
-  // 2. OAuth Callback Handler (Popup postMessage flow)
+// Helper to exchange OAuth authorization code for Access Token using native IPv4 HTTPS
+function requestCTraderToken(tokenUrl: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(tokenUrl);
+    const req = https.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || 443,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: 'GET',
+        family: 4, // Force IPv4 to avoid Docker / VPS IPv6 unreachable errors
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': 'cTrader-TradingDesk/1.0',
+        },
+        timeout: 18000,
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          try {
+            const parsedData = JSON.parse(data);
+            resolve(parsedData);
+          } catch {
+            reject(new Error(`پاسخ دریافتی از cTrader در قالب JSON نبود: ${data.slice(0, 120)}`));
+          }
+        });
+      }
+    );
+
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error('مهلت زمانی اتصال به openapi.ctrader.com به پایان رسید (Timeout).'));
+    });
+
+    req.on('error', (err: any) => {
+      const detail = err.code || err.message;
+      reject(new Error(`خطای ارتباط با سرور cTrader (${detail})`));
+    });
+
+    req.end();
+  });
+}
+
+// 2. OAuth Callback Handler (Popup postMessage flow with IPv4 & Interactive Fallback)
   app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
     const code = req.query.code as string | undefined;
     const errorDesc = req.query.error_description || req.query.error;
@@ -1095,9 +1152,12 @@ async function startServer() {
         <!doctype html>
         <html lang="fa" dir="rtl">
           <head><meta charset="utf-8"><title>خطا در احراز هویت cTrader</title></head>
-          <body style="font-family: sans-serif; background: #020617; color: #f8fafc; padding: 2rem; text-align: center;">
-            <h3 style="color: #f87171;">خطا در اتصال به cTrader</h3>
-            <p>${errorDesc || 'کد احراز هویت از سرور cTrader دریافت نشد.'}</p>
+          <body style="font-family: system-ui, sans-serif; background: #020617; color: #f8fafc; padding: 2.5rem 1.5rem; text-align: center;">
+            <div style="max-width: 440px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 2rem;">
+              <h3 style="color: #f87171; margin: 0 0 0.5rem; font-size: 1.15rem;">خطا در اتصال به cTrader</h3>
+              <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 1.5rem;">${errorDesc || 'کد احراز هویت از سرور cTrader دریافت نشد.'}</p>
+              <button onclick="window.close()" style="background: #334155; color: #fff; border: none; padding: 0.5rem 1.25rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">بستن پنجره</button>
+            </div>
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(errorDesc || 'No code')} }, '*');
@@ -1109,32 +1169,44 @@ async function startServer() {
       return;
     }
 
+    const clientId = (ctraderManager as any).clientId || process.env.CTRADER_CLIENT_ID || '';
+    const clientSecret = (ctraderManager as any).clientSecret || process.env.CTRADER_CLIENT_SECRET || '';
+    const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+    const forwardedHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
+    const baseAppUrl = (process.env.APP_URL || `${forwardedProto}://${forwardedHost}`).replace(/\/$/, '');
+    const redirectUri = `${baseAppUrl}/auth/callback`;
+
+    const tokenParams = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      client_secret: clientSecret,
+    });
+
+    const tokenUrl = `https://openapi.ctrader.com/apps/token?${tokenParams.toString()}`;
+
     try {
-      const clientId = (ctraderManager as any).clientId || process.env.CTRADER_CLIENT_ID || '';
-      const clientSecret = (ctraderManager as any).clientSecret || process.env.CTRADER_CLIENT_SECRET || '';
-      const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
-      const forwardedHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
-      const baseAppUrl = (process.env.APP_URL || `${forwardedProto}://${forwardedHost}`).replace(/\/$/, '');
-      const redirectUri = `${baseAppUrl}/auth/callback`;
+      let tokenData: any = null;
 
-      const tokenParams = new URLSearchParams({
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-        client_id: clientId,
-        client_secret: clientSecret,
-      });
+      // Try Strategy 1: IPv4 Native HTTPS request
+      try {
+        tokenData = await requestCTraderToken(tokenUrl);
+      } catch (e1: any) {
+        console.warn('[cTrader] IPv4 https.request failed, trying fetch fallback:', e1.message);
+        // Try Strategy 2: Fetch fallback
+        const fetchRes = await fetch(tokenUrl, {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(12000),
+        });
+        tokenData = await fetchRes.json();
+      }
 
-      const tokenResponse = await fetch(`https://openapi.ctrader.com/apps/token?${tokenParams.toString()}`, {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-      });
-
-      const tokenData: any = await tokenResponse.json();
-      const accessToken = tokenData.accessToken || tokenData.access_token;
+      const accessToken = tokenData?.accessToken || tokenData?.access_token;
 
       if (!accessToken) {
-        throw new Error(tokenData.description || tokenData.error_description || 'توکن دسترسی از cTrader دریافت نشد.');
+        throw new Error(tokenData?.description || tokenData?.error_description || tokenData?.errorCode || 'توکن دسترسی از cTrader دریافت نشد.');
       }
 
       // Persist access token immediately
@@ -1149,7 +1221,7 @@ async function startServer() {
             <meta name="viewport" content="width=device-width, initial-scale=1">
           </head>
           <body style="font-family: system-ui, sans-serif; background: #020617; color: #f8fafc; padding: 2.5rem 1.5rem; text-align: center;">
-            <div style="max-width: 420px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 2rem;">
+            <div style="max-width: 440px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 2rem;">
               <h3 style="margin: 0 0 0.5rem; color: #34d399; font-size: 1.15rem;">اتصال به cTrader با موفقیت انجام شد</h3>
               <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 1.5rem;">توکن پروداکشن دریافت و در سرور ذخیره شد. پنجره در حال بسته شدن است...</p>
               <button onclick="closeNow()" style="background: #2563eb; color: #fff; border: none; padding: 0.5rem 1.25rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">بستن پنجره</button>
@@ -1174,24 +1246,94 @@ async function startServer() {
         </html>
       `);
     } catch (err: any) {
-      console.error('[cTrader OAuth Error]', err.message);
+      console.error('[cTrader OAuth Error]', err);
+      // Interactive Fallback UI: If server network cannot reach openapi.ctrader.com, user can fetch or paste in browser!
       res.send(`
         <!doctype html>
         <html lang="fa" dir="rtl">
           <head>
             <meta charset="utf-8">
-            <title>خطا در دریافت توکن cTrader</title>
+            <title>خطا در اتصال به سرور cTrader</title>
             <meta name="viewport" content="width=device-width, initial-scale=1">
           </head>
-          <body style="font-family: system-ui, sans-serif; background: #020617; color: #f8fafc; padding: 2.5rem 1.5rem; text-align: center;">
-            <div style="max-width: 420px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 2rem;">
-              <h3 style="color: #f87171; margin: 0 0 0.5rem; font-size: 1.1rem;">خطا در تبادل توکن با cTrader</h3>
-              <p style="color: #cbd5e1; font-size: 0.85rem; margin: 0 0 1.5rem;">${err.message}</p>
-              <button onclick="window.close()" style="background: #334155; color: #fff; border: none; padding: 0.5rem 1.25rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">بستن پنجره</button>
+          <body style="font-family: system-ui, sans-serif; background: #020617; color: #f8fafc; padding: 2rem 1rem; text-align: center;">
+            <div style="max-width: 480px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 1.75rem; text-align: right;">
+              <h3 style="color: #f87171; margin: 0 0 0.5rem; font-size: 1.05rem; text-align: center;">عدم دسترسی سرور به سرور cTrader</h3>
+              <p style="color: #94a3b8; font-size: 0.8rem; margin: 0 0 1rem; line-height: 1.5; text-align: center;">
+                سرور شما (به دلیل محدودیت‌های اینترنت/فیلترینگ دیتا‌سنتر) نتوانست مستقیماً به آدرس احراز هویت متصل شود.
+              </p>
+
+              <div style="background: #020617; border: 1px solid #1e293b; border-radius: 8px; padding: 1rem; margin-bottom: 1.25rem;">
+                <p style="color: #38bdf8; font-size: 0.8rem; font-weight: bold; margin: 0 0 0.5rem;">
+                  راهکار فوری (دریافت با مرورگر خودتان):
+                </p>
+                <ol style="color: #cbd5e1; font-size: 0.75rem; padding-right: 1.25rem; margin: 0 0 0.75rem; line-height: 1.6;">
+                  <li>روی دکمه زیر کلیک کنید تا لینک مستقیم در تب جدید باز شود:</li>
+                  <div style="margin: 0.5rem 0;">
+                    <a href="${tokenUrl}" target="_blank" style="display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 0.4rem 0.85rem; border-radius: 6px; font-size: 0.75rem; font-weight: bold;">
+                      باز کردن لینک دریافت توکن در تب جدید
+                    </a>
+                  </div>
+                  <li>متن داخل accessToken را کپی کرده و در کادر زیر قرار دهید:</li>
+                </ol>
+
+                <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                  <input
+                    id="manualTokenInput"
+                    type="text"
+                    placeholder="مقدار accessToken را اینجا Paste کنید..."
+                    dir="ltr"
+                    style="width: 100%; box-sizing: border-box; background: #0f172a; border: 1px solid #334155; color: #f8fafc; padding: 0.5rem; border-radius: 6px; font-size: 0.75rem; font-family: monospace;"
+                  />
+                  <button
+                    onclick="submitManualToken()"
+                    id="saveTokenBtn"
+                    style="background: #10b981; color: #fff; border: none; padding: 0.5rem; border-radius: 6px; font-size: 0.8rem; font-weight: bold; cursor: pointer;"
+                  >
+                    ذخیره توکن و ورود به برنامه
+                  </button>
+                  <p id="tokenStatus" style="font-size: 0.75rem; margin: 0.25rem 0 0; text-align: center; color: #94a3b8;"></p>
+                </div>
+              </div>
+
+              <div style="text-align: center;">
+                <button onclick="window.close()" style="background: #1e293b; color: #94a3b8; border: none; padding: 0.4rem 1rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer;">بستن این پنجره</button>
+              </div>
             </div>
+
             <script>
-              if (window.opener) {
-                window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(err.message)} }, '*');
+              async function submitManualToken() {
+                const token = document.getElementById('manualTokenInput').value.trim();
+                const status = document.getElementById('tokenStatus');
+                const btn = document.getElementById('saveTokenBtn');
+                if (!token) {
+                  status.innerText = 'لطفاً توکن را وارد کنید.';
+                  status.style.color = '#f87171';
+                  return;
+                }
+                btn.disabled = true;
+                btn.innerText = 'در حال ذخیره...';
+                try {
+                  const res = await fetch('/api/ctrader/connect-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accessToken: token }),
+                  });
+                  if (!res.ok) throw new Error('خطا در ذخیره توکن');
+                  status.innerText = 'توکن با موفقیت ذخیره شد!';
+                  status.style.color = '#34d399';
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
+                    setTimeout(() => window.close(), 600);
+                  } else {
+                    window.location.href = '/';
+                  }
+                } catch (e) {
+                  btn.disabled = false;
+                  btn.innerText = 'ذخیره توکن و ورود به برنامه';
+                  status.innerText = 'خطا در ثبت توکن روی سرور: ' + e.message;
+                  status.style.color = '#f87171';
+                }
               }
             </script>
           </body>
