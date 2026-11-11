@@ -15,6 +15,10 @@ import {
   Radio,
   Sliders,
   X,
+  Wallet,
+  TrendingUp,
+  Layers,
+  Coins,
 } from 'lucide-react';
 
 interface CTraderAccount {
@@ -22,6 +26,10 @@ interface CTraderAccount {
   isLive: boolean;
   traderLogin: number;
   brokerTitleShort?: string;
+  balance?: number;
+  currency?: string;
+  leverage?: number;
+  freeMargin?: number;
 }
 
 interface CTraderSymbol {
@@ -77,6 +85,7 @@ interface CredentialsStatus {
   selectedAccountId: number | null;
   isLiveEnvironment: boolean;
   accounts: CTraderAccount[];
+  activeAccount?: CTraderAccount;
   lastError: string | null;
 }
 
@@ -99,6 +108,8 @@ export default function App() {
   const [inputClientSecret, setInputClientSecret] = useState<string>('');
   const [manualToken, setManualToken] = useState<string>('');
   const [copiedCallback, setCopiedCallback] = useState<boolean>(false);
+  const [customBalanceInput, setCustomBalanceInput] = useState<string>('');
+  const [updatingBalance, setUpdatingBalance] = useState<boolean>(false);
 
   // Feedback banner
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -130,6 +141,30 @@ export default function App() {
       showFeedback('error', err.message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleUpdateSandboxBalance = async (targetAmount: number) => {
+    if (isNaN(targetAmount) || targetAmount <= 0) {
+      showFeedback('error', 'مبلغ بالانس باید بزرگتر از صفر باشد.');
+      return;
+    }
+    setUpdatingBalance(true);
+    try {
+      const res = await fetch('/api/ctrader/sandbox/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ balance: targetAmount }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطا در تغییر موجودی');
+      setStatus(data.status);
+      setCustomBalanceInput('');
+      showFeedback('success', `موجودی حساب با موفقیت به $${targetAmount.toLocaleString('en-US')} تغییر یافت.`);
+    } catch (err: any) {
+      showFeedback('error', err.message);
+    } finally {
+      setUpdatingBalance(false);
     }
   };
 
@@ -206,6 +241,38 @@ export default function App() {
   const selectedSymbol = useMemo(() => {
     return symbols.find((s) => s.symbolId === Number(symbolId)) || symbols[0];
   }, [symbols, symbolId]);
+
+  const currentAccount = useMemo(() => {
+    if (!status) return null;
+    return (
+      status.accounts.find((a) => a.ctidTraderAccountId === status.selectedAccountId) ||
+      status.activeAccount ||
+      status.accounts[0] ||
+      null
+    );
+  }, [status]);
+
+  const currentBalance = currentAccount?.balance ?? (status?.mode === 'sandbox' ? 10000 : 0);
+  const currentCurrency = currentAccount?.currency || 'USD';
+
+  // Calculate Unrealized PnL from open positions
+  const unrealizedPnL = useMemo(() => {
+    let sum = 0;
+    for (const p of positions) {
+      const sym = symbols.find((s) => s.symbolId === p.symbolId);
+      const curPrice = sym?.referencePrice ?? p.entryPrice;
+      const priceDiff = p.tradeSide === 'BUY' ? curPrice - p.entryPrice : p.entryPrice - curPrice;
+      const lotMultiplier =
+        sym?.lotSize && sym.lotSize > 0
+          ? sym.lotSize / (sym.pipPosition ? Math.pow(10, sym.digits - sym.pipPosition) : 1)
+          : 100_000;
+      const tradePnL = priceDiff * p.volumeLots * lotMultiplier + (p.commission || 0) + (p.swap || 0);
+      sum += isNaN(tradePnL) ? 0 : tradePnL;
+    }
+    return Math.round(sum * 100) / 100;
+  }, [positions, symbols]);
+
+  const equity = Math.max(0, Math.round((currentBalance + unrealizedPnL) * 100) / 100);
 
   // Adjust default price for pending orders
   useEffect(() => {
@@ -500,24 +567,36 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
       {/* Top Header - Clean, Production-Grade */}
-      <header className="border-b border-slate-800 bg-slate-900/60 sticky top-0 z-20 backdrop-blur px-6 py-3.5 flex items-center justify-between">
+      <header className="border-b border-slate-800 bg-slate-900/60 sticky top-0 z-20 backdrop-blur px-6 py-3.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
             <Radio className="w-4 h-4 text-emerald-400" />
             <span className="font-bold tracking-tight text-white text-base">cTrader Trading Desk</span>
           </div>
+
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 border-r border-slate-800 pr-4">
             <span>حساب:</span>
             <span className="font-mono text-slate-200">
-              #{status?.selectedAccountId || '50091824'}
+              #{currentAccount?.ctidTraderAccountId || status?.selectedAccountId || '50091824'}
             </span>
-            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${status?.isLiveEnvironment ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}`}>
-              {status?.isLiveEnvironment ? 'LIVE' : 'DEMO'}
+            <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${currentAccount?.isLive ?? status?.isLiveEnvironment ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-amber-950 text-amber-400 border border-amber-800'}`}>
+              {currentAccount?.isLive ?? status?.isLiveEnvironment ? 'LIVE' : 'DEMO'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Header Balance Pill */}
+          <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-1.5 shadow-xs">
+            <Wallet className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-slate-400 hidden md:inline">بالانس:</span>
+              <span className="font-mono font-bold text-xs text-emerald-400 tabular-nums" dir="ltr">
+                {currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {currentCurrency}
+              </span>
+            </div>
+          </div>
+
           {status?.accounts && status.accounts.length > 1 && (
             <select
               value={status.selectedAccountId || ''}
@@ -527,6 +606,7 @@ export default function App() {
               {status.accounts.map((acc) => (
                 <option key={acc.ctidTraderAccountId} value={acc.ctidTraderAccountId}>
                   {acc.brokerTitleShort || (acc.isLive ? 'Live' : 'Demo')} (#{acc.ctidTraderAccountId})
+                  {acc.balance !== undefined ? ` • ${acc.balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${acc.currency || 'USD'}` : ''}
                 </option>
               ))}
             </select>
@@ -553,6 +633,96 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Account Balance & Metrics Bar */}
+      <div className="bg-slate-900/30 border-b border-slate-800/80 px-6 py-3">
+        <div className="max-w-[1440px] w-full mx-auto grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {/* Card 1: Balance */}
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 font-medium block">بالانس حساب (Balance)</span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-base font-bold font-mono text-white tabular-nums" dir="ltr">
+                  {currentBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">{currentCurrency}</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-blue-950/60 border border-blue-800/60 flex items-center justify-center text-blue-400 shrink-0">
+              <Wallet className="w-4 h-4" />
+            </div>
+          </div>
+
+          {/* Card 2: Equity */}
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 font-medium block">موجودی شناور (Equity)</span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="text-base font-bold font-mono text-white tabular-nums" dir="ltr">
+                  {equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">{currentCurrency}</span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-indigo-950/60 border border-indigo-800/60 flex items-center justify-center text-indigo-400 shrink-0">
+              <TrendingUp className="w-4 h-4" />
+            </div>
+          </div>
+
+          {/* Card 3: Floating PnL */}
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 font-medium block">سود / زیان باز (P&L)</span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span
+                  className={`text-base font-bold font-mono tabular-nums ${
+                    unrealizedPnL > 0 ? 'text-emerald-400' : unrealizedPnL < 0 ? 'text-rose-400' : 'text-slate-300'
+                  }`}
+                  dir="ltr"
+                >
+                  {unrealizedPnL > 0 ? `+${unrealizedPnL.toFixed(2)}` : unrealizedPnL.toFixed(2)}
+                </span>
+                <span className="text-[11px] font-mono text-slate-400">{currentCurrency}</span>
+              </div>
+            </div>
+            <div
+              className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
+                unrealizedPnL > 0
+                  ? 'bg-emerald-950/60 border-emerald-800/60 text-emerald-400'
+                  : unrealizedPnL < 0
+                  ? 'bg-rose-950/60 border-rose-800/60 text-rose-400'
+                  : 'bg-slate-900 border-slate-800 text-slate-400'
+              }`}
+            >
+              {unrealizedPnL >= 0 ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+            </div>
+          </div>
+
+          {/* Card 4: Account details */}
+          <div className="bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+            <div>
+              <span className="text-[11px] text-slate-400 font-medium block">مشخصات حساب</span>
+              <div className="flex items-center gap-1.5 mt-1 text-xs">
+                <span className="font-mono text-slate-300">#{currentAccount?.ctidTraderAccountId || '50091824'}</span>
+                <span className="text-slate-600">•</span>
+                <span className="font-mono text-slate-400">1:{currentAccount?.leverage || 100}</span>
+                <span
+                  className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                    currentAccount?.isLive
+                      ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                      : 'bg-amber-950 text-amber-400 border border-amber-800'
+                  }`}
+                >
+                  {currentAccount?.isLive ? 'LIVE' : 'DEMO'}
+                </span>
+              </div>
+            </div>
+            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 shrink-0">
+              <Layers className="w-4 h-4" />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Notification Banner */}
       {feedback && (
@@ -1122,6 +1292,145 @@ export default function App() {
                 ذخیره اطلاعات و اتصال
               </button>
             </form>
+
+            {/* Connected Accounts & Balances Overview */}
+            {status?.accounts && status.accounts.length > 0 && (
+              <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-900">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4 text-emerald-400" />
+                    <h4 className="text-xs font-bold text-white">حساب‌های متصل و بالانس (Balances)</h4>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    {status.accounts.length} حساب شناسایی شد
+                  </span>
+                </div>
+
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-0.5">
+                  {status.accounts.map((acc) => {
+                    const isActive = acc.ctidTraderAccountId === (status.selectedAccountId || 50091824);
+                    const bal = acc.balance !== undefined ? acc.balance : (status.mode === 'sandbox' ? 10000 : 0);
+                    const curr = acc.currency || 'USD';
+
+                    return (
+                      <div
+                        key={acc.ctidTraderAccountId}
+                        className={`p-2.5 rounded-lg border flex items-center justify-between transition-colors ${
+                          isActive
+                            ? 'bg-blue-950/30 border-blue-800/80'
+                            : 'bg-slate-900/60 border-slate-800/80 hover:bg-slate-800/40'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-2 h-2 rounded-full ${isActive ? 'bg-emerald-400 ring-2 ring-emerald-950' : 'bg-slate-600'}`} />
+                          <div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-xs text-white">
+                                {acc.brokerTitleShort || (acc.isLive ? 'cTrader Live' : 'cTrader Demo')}
+                              </span>
+                              <span
+                                className={`px-1 py-0.2 rounded text-[9px] font-bold ${
+                                  acc.isLive
+                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                    : 'bg-amber-950 text-amber-400 border border-amber-800'
+                                }`}
+                              >
+                                {acc.isLive ? 'LIVE' : 'DEMO'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 text-[11px] font-mono text-slate-400">
+                              <span>#{acc.ctidTraderAccountId}</span>
+                              {acc.leverage && (
+                                <>
+                                  <span className="text-slate-600">•</span>
+                                  <span>1:{acc.leverage}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-left font-mono">
+                            <span className="text-[10px] text-slate-400 block">بالانس</span>
+                            <span className="text-xs font-bold text-emerald-400 tabular-nums" dir="ltr">
+                              {bal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {curr}
+                            </span>
+                          </div>
+
+                          {!isActive ? (
+                            <button
+                              type="button"
+                              onClick={() => handleAccountSelect(acc.ctidTraderAccountId)}
+                              disabled={syncing}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] font-medium transition-colors"
+                            >
+                              انتخاب
+                            </button>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-blue-950 text-blue-300 border border-blue-800/60 rounded text-[10px] font-semibold">
+                              فعال
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Sandbox Demo Balance Customizer */}
+                {status.mode === 'sandbox' && (
+                  <div className="pt-2 border-t border-slate-900 mt-2 space-y-2">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="text-slate-300 font-medium flex items-center gap-1">
+                        <Coins className="w-3.5 h-3.5 text-amber-400" />
+                        <span>تنظیم بالانس حساب تستی (Sandbox)</span>
+                      </span>
+                      <span className="font-mono text-slate-500">فعلی: ${currentBalance.toLocaleString('en-US')}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        step="100"
+                        placeholder="مبلغ مورد نظر (مثلاً 50000)"
+                        value={customBalanceInput}
+                        onChange={(e) => setCustomBalanceInput(e.target.value)}
+                        dir="ltr"
+                        className="flex-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const val = parseFloat(customBalanceInput);
+                          if (!isNaN(val) && val > 0) handleUpdateSandboxBalance(val);
+                        }}
+                        disabled={updatingBalance || !customBalanceInput}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded text-xs font-semibold transition-colors"
+                      >
+                        {updatingBalance ? '...' : 'تغییر بالانس'}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-[10px]">
+                      <span className="text-slate-500">پیش‌فرض‌ها:</span>
+                      {[5000, 10000, 25000, 50000, 100000].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => handleUpdateSandboxBalance(preset)}
+                          disabled={updatingBalance}
+                          className="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded font-mono text-slate-300 transition-colors"
+                        >
+                          ${(preset / 1000).toFixed(0)}k
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Direct OAuth Section */}
             <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg space-y-3">

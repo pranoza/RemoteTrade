@@ -32,6 +32,8 @@ const PAYLOAD_TYPES = {
   SYMBOLS_LIST_RES: 2115,
   SYMBOL_BY_ID_REQ: 2116,
   SYMBOL_BY_ID_RES: 2117,
+  TRADER_REQ: 2121,
+  TRADER_RES: 2122,
   RECONCILE_REQ: 2124,
   RECONCILE_RES: 2125,
   EXECUTION_EVENT: 2126,
@@ -46,6 +48,10 @@ export interface CTraderAccount {
   isLive: boolean;
   traderLogin: number;
   brokerTitleShort?: string;
+  balance?: number;
+  currency?: string;
+  leverage?: number;
+  freeMargin?: number;
 }
 
 export interface CTraderSymbol {
@@ -162,6 +168,9 @@ class CTraderManager {
   private positions: CTraderPosition[] = [];
   private pendingOrders: CTraderPendingOrder[] = [];
   private lastError: string | null = null;
+  private sandboxBalance: number = 10000.0;
+  private sandboxCurrency: string = 'USD';
+  private accountDetails: Map<number, { balance: number; currency: string; leverage?: number; freeMargin?: number }> = new Map();
 
   constructor() {
     this.loadPersistedConfig();
@@ -174,6 +183,7 @@ class CTraderManager {
         const data = JSON.parse(raw);
         if (data.clientId) this.clientId = data.clientId;
         if (data.clientSecret) this.clientSecret = data.clientSecret;
+        if (data.sandboxBalance !== undefined) this.sandboxBalance = Number(data.sandboxBalance);
         if (data.accessToken) {
           this.accessToken = data.accessToken;
           this.mode = 'live_api';
@@ -197,6 +207,7 @@ class CTraderManager {
             clientId: this.clientId,
             clientSecret: this.clientSecret,
             accessToken: this.accessToken,
+            sandboxBalance: this.sandboxBalance,
           },
           null,
           2
@@ -211,21 +222,53 @@ class CTraderManager {
   public getCredentialsStatus() {
     const hasClientId = Boolean(this.clientId && this.clientId !== 'MY_CTRADER_CLIENT_ID');
     const hasClientSecret = Boolean(this.clientSecret && this.clientSecret !== 'MY_CTRADER_CLIENT_SECRET');
+    const activeAccountId = this.selectedAccountId || (this.mode === 'sandbox' ? 50091824 : null);
+
+    const accountsList: CTraderAccount[] = this.mode === 'sandbox'
+      ? [
+          {
+            ctidTraderAccountId: 50091824,
+            isLive: false,
+            traderLogin: 8841209,
+            brokerTitleShort: 'cTrader Demo (Sandbox)',
+            balance: this.sandboxBalance,
+            currency: this.sandboxCurrency,
+            leverage: 100,
+          },
+        ]
+      : this.accounts.map((acc) => {
+          const det = this.accountDetails.get(acc.ctidTraderAccountId);
+          return {
+            ...acc,
+            balance: det?.balance ?? acc.balance,
+            currency: det?.currency ?? acc.currency ?? 'USD',
+            leverage: det?.leverage ?? acc.leverage,
+            freeMargin: det?.freeMargin ?? acc.freeMargin,
+          };
+        });
+
+    const activeAcc = accountsList.find((a) => a.ctidTraderAccountId === activeAccountId) || accountsList[0];
+
     return {
       hasClientId,
       hasClientSecret,
       clientIdMasked: this.clientId ? (this.clientId.length > 8 ? `${this.clientId.slice(0, 4)}...${this.clientId.slice(-4)}` : this.clientId) : '',
       hasAccessToken: Boolean(this.accessToken),
       mode: this.mode,
-      selectedAccountId: this.selectedAccountId || (this.mode === 'sandbox' ? 50091824 : null),
+      selectedAccountId: activeAccountId,
       isLiveEnvironment: this.isLiveEnvironment,
-      accounts: this.mode === 'sandbox'
-        ? [
-            { ctidTraderAccountId: 50091824, isLive: false, traderLogin: 8841209, brokerTitleShort: 'cTrader Demo (Sandbox)' },
-          ]
-        : this.accounts,
+      accounts: accountsList,
+      activeAccount: activeAcc,
       lastError: this.lastError,
     };
+  }
+
+  public setSandboxBalance(amount: number) {
+    if (amount > 0) {
+      this.sandboxBalance = Math.round(amount * 100) / 100;
+      this.persistConfig();
+    }
+    return this.sandboxBalance;
   }
 
   public async setCredentials(params: { clientId?: string; clientSecret?: string; accessToken?: string }) {
@@ -546,6 +589,35 @@ class CTraderManager {
           ctidTraderAccountId: accountId,
           accessToken: this.accessToken,
         });
+
+        // Query trader account profile & balance (2121 -> 2122)
+        try {
+          const traderRes = await sendRequest(
+            PAYLOAD_TYPES.TRADER_REQ,
+            { ctidTraderAccountId: accountId },
+            [PAYLOAD_TYPES.TRADER_RES, PAYLOAD_TYPES.OA_ERROR_RES]
+          );
+          const t = traderRes.payload?.trader;
+          if (t) {
+            const digits = t.moneyDigits !== undefined ? Number(t.moneyDigits) : 2;
+            const balance = t.balance !== undefined ? Number(t.balance) / Math.pow(10, digits) : 0;
+            const leverage = t.leverageInCents ? Number(t.leverageInCents) / 100 : undefined;
+            const depositAssetId = t.depositAssetId ? String(t.depositAssetId) : 'USD';
+            this.accountDetails.set(accountId, {
+              balance,
+              currency: depositAssetId,
+              leverage,
+            });
+            const acc = this.accounts.find((a) => a.ctidTraderAccountId === accountId);
+            if (acc) {
+              acc.balance = balance;
+              acc.currency = depositAssetId;
+              acc.leverage = leverage;
+            }
+          }
+        } catch (traderErr: any) {
+          console.warn('[cTrader] TRADER_REQ warning:', traderErr.message);
+        }
 
         // Get light symbols list (2114 -> 2115)
         const symRes = await sendRequest(PAYLOAD_TYPES.SYMBOLS_LIST_REQ, {
@@ -979,7 +1051,16 @@ class CTraderManager {
       const idx = this.positions.findIndex((p) => p.positionId === Number(positionId));
       if (idx === -1) throw new Error('پوزیشن مورد نظر یافت نشد.');
       const removed = this.positions.splice(idx, 1)[0];
-      return { type: 'POSITION_CLOSED', item: removed };
+      const sym = this.symbols.find((s) => s.symbolId === removed.symbolId);
+      const currentPrice = sym?.referencePrice ?? removed.entryPrice;
+      const priceDiff = removed.tradeSide === 'BUY'
+        ? (currentPrice - removed.entryPrice)
+        : (removed.entryPrice - currentPrice);
+      const lotMultiplier = sym?.lotSize && sym.lotSize > 0 ? (sym.lotSize / (sym.pipPosition ? Math.pow(10, sym.digits - sym.pipPosition) : 1)) : 100_000;
+      const profit = Number((priceDiff * removed.volumeLots * lotMultiplier + (removed.commission || 0) + (removed.swap || 0)).toFixed(2));
+      this.sandboxBalance = Math.max(0, Number((this.sandboxBalance + (isNaN(profit) ? 0 : profit)).toFixed(2)));
+      this.persistConfig();
+      return { type: 'POSITION_CLOSED', item: removed, profit, balance: this.sandboxBalance };
     }
 
     if (!this.selectedAccountId || !this.accessToken) {
@@ -1382,6 +1463,22 @@ function requestCTraderToken(tokenUrl: string): Promise<any> {
     try {
       const { ctidTraderAccountId } = req.body;
       await ctraderManager.selectAccount(Number(ctidTraderAccountId));
+      res.json(ctraderManager.getStateSnapshot());
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 6.1. Adjust Sandbox Demo Balance
+  app.post('/api/ctrader/sandbox/balance', (req, res) => {
+    try {
+      const { balance } = req.body;
+      const amount = parseFloat(balance);
+      if (isNaN(amount) || amount <= 0) {
+        res.status(400).json({ error: 'مبلغ بالانس باید بزرگتر از صفر باشد.' });
+        return;
+      }
+      ctraderManager.setSandboxBalance(amount);
       res.json(ctraderManager.getStateSnapshot());
     } catch (err: any) {
       res.status(400).json({ error: err.message });
