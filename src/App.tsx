@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import {
   RefreshCw,
   ArrowUpRight,
@@ -19,6 +19,14 @@ import {
   TrendingUp,
   Layers,
   Coins,
+  Lock,
+  User,
+  LogOut,
+  Eye,
+  EyeOff,
+  KeyRound,
+  SlidersHorizontal,
+  Activity,
 } from 'lucide-react';
 
 interface CTraderAccount {
@@ -52,12 +60,60 @@ interface CTraderPosition {
   volumeLots: number;
   volumeProtocol: number;
   entryPrice: number;
+  currentPrice?: number;
+  grossProfit?: number;
+  netProfit?: number;
+  pips?: number;
   stopLoss: number | null;
   takeProfit: number | null;
   swap: number;
   commission: number;
   comment: string;
   openTimestamp: number;
+}
+
+export function computeTradePnL(
+  p: CTraderPosition,
+  symbol?: CTraderSymbol,
+  overridePrice?: number
+) {
+  const curPrice =
+    overridePrice !== undefined && overridePrice > 0
+      ? overridePrice
+      : (p.currentPrice ?? symbol?.referencePrice ?? p.entryPrice);
+  const priceDiff = p.tradeSide === 'BUY' ? curPrice - p.entryPrice : p.entryPrice - curPrice;
+  const upper = (symbol?.symbolName || p.symbolName || '').toUpperCase();
+  let unitsPerLot = 100_000;
+  if (upper.includes('XAU')) unitsPerLot = 100;
+  else if (upper.includes('XAG')) unitsPerLot = 5000;
+  else if (
+    upper.includes('BTC') ||
+    upper.includes('ETH') ||
+    upper.includes('US30') ||
+    upper.includes('NAS') ||
+    upper.includes('USTEC') ||
+    upper.includes('US500') ||
+    upper.includes('DE40')
+  ) {
+    unitsPerLot = 1;
+  }
+
+  const grossProfit = Number((priceDiff * p.volumeLots * unitsPerLot).toFixed(2));
+  const netProfit = Number((grossProfit + (p.commission || 0) + (p.swap || 0)).toFixed(2));
+  const pipMultiplier =
+    symbol?.pipPosition !== undefined
+      ? Math.pow(10, symbol.pipPosition)
+      : (symbol?.digits ? Math.pow(10, symbol.digits - 1) : 10000);
+  const pips = Number((priceDiff * pipMultiplier).toFixed(1));
+  const pct = p.entryPrice > 0 ? Number(((priceDiff / p.entryPrice) * 100).toFixed(2)) : 0;
+
+  return {
+    currentPrice: curPrice,
+    grossProfit,
+    netProfit,
+    pips,
+    pct,
+  };
 }
 
 interface CTraderPendingOrder {
@@ -97,6 +153,30 @@ export default function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
 
+  // Authentication State (Environment Variables Login)
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('ctrader_auth_token');
+    }
+    return null;
+  });
+  const [authUser, setAuthUser] = useState<{ username: string } | null>(null);
+  const [authChecking, setAuthChecking] = useState<boolean>(true);
+  const [loginUsername, setLoginUsername] = useState<string>('');
+  const [loginPassword, setLoginPassword] = useState<string>('');
+  const [loginShowPassword, setLoginShowPassword] = useState<boolean>(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginSubmitting, setLoginSubmitting] = useState<boolean>(false);
+
+  // Price Simulation State (For sandbox / live testing)
+  const [showPriceSimulator, setShowPriceSimulator] = useState<boolean>(false);
+  const [simSymbolId, setSimSymbolId] = useState<number>(41);
+  const [simPriceInput, setSimPriceInput] = useState<string>('');
+  const [simulatingPrice, setSimulatingPrice] = useState<boolean>(false);
+
+  // Auto-refresh timer toggle
+  const [autoRefresh, setAutoRefresh] = useState<boolean>(true);
+
   // Active view filters
   const [activeTab, setActiveTab] = useState<'positions' | 'orders'>('positions');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -114,11 +194,120 @@ export default function App() {
   // Feedback banner
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  const showFeedback = (type: 'success' | 'error', message: string) => {
+    setFeedback({ type, message });
+    setTimeout(() => {
+      setFeedback((prev) => (prev?.message === message ? null : prev));
+    }, 5000);
+  };
+
+  // Authenticated fetch wrapper
+  const authFetch = useCallback(
+    async (url: string, options: RequestInit = {}) => {
+      const token = authToken || localStorage.getItem('ctrader_auth_token');
+      const headers = new Headers(options.headers || {});
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401 && !url.includes('/api/auth/login')) {
+        setAuthToken(null);
+        setAuthUser(null);
+        localStorage.removeItem('ctrader_auth_token');
+        showFeedback('error', 'نشست کاربری شما پایان یافته است. لطفاً مجدداً لاگین کنید.');
+      }
+      return res;
+    },
+    [authToken]
+  );
+
+  // Check existing session token on mount
+  const checkAuth = useCallback(async () => {
+    const token = localStorage.getItem('ctrader_auth_token');
+    if (!token) {
+      setAuthChecking(false);
+      setLoading(false);
+      return;
+    }
+    try {
+      const res = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.authenticated && data.user) {
+        setAuthUser(data.user);
+        setAuthToken(token);
+      } else {
+        localStorage.removeItem('ctrader_auth_token');
+        setAuthToken(null);
+        setAuthUser(null);
+      }
+    } catch {
+      localStorage.removeItem('ctrader_auth_token');
+      setAuthToken(null);
+      setAuthUser(null);
+    } finally {
+      setAuthChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginUsername.trim() || !loginPassword) {
+      setLoginError('لطفاً نام کاربری و رمز عبور را وارد کنید.');
+      return;
+    }
+    setLoginSubmitting(true);
+    setLoginError(null);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: loginUsername.trim(),
+          password: loginPassword,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'نام کاربری یا رمز عبور اشتباه است.');
+      }
+      localStorage.setItem('ctrader_auth_token', data.token);
+      setAuthToken(data.token);
+      setAuthUser(data.user);
+      setLoginPassword('');
+      showFeedback('success', `خوش آمدید، ${data.user.username}`);
+    } catch (err: any) {
+      setLoginError(err.message || 'خطا در ورود به سیستم');
+    } finally {
+      setLoginSubmitting(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authFetch('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore
+    }
+    localStorage.removeItem('ctrader_auth_token');
+    setAuthToken(null);
+    setAuthUser(null);
+    setStatus(null);
+    setPositions([]);
+    setPendingOrders([]);
+    showFeedback('success', 'با موفقیت خارج شدید.');
+  };
+
   const handleSaveCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     setSyncing(true);
     try {
-      const res = await fetch('/api/ctrader/credentials', {
+      const res = await authFetch('/api/ctrader/credentials', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -151,7 +340,7 @@ export default function App() {
     }
     setUpdatingBalance(true);
     try {
-      const res = await fetch('/api/ctrader/sandbox/balance', {
+      const res = await authFetch('/api/ctrader/sandbox/balance', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ balance: targetAmount }),
@@ -165,6 +354,29 @@ export default function App() {
       showFeedback('error', err.message);
     } finally {
       setUpdatingBalance(false);
+    }
+  };
+
+  const handleUpdatePrice = async (targetPrice: number) => {
+    if (isNaN(targetPrice) || targetPrice <= 0) return;
+    setSimulatingPrice(true);
+    try {
+      const res = await authFetch('/api/ctrader/symbol/price', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbolId: simSymbolId, price: targetPrice }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطا در بروزرسانی قیمت');
+      setStatus(data.status);
+      setSymbols(data.symbols || []);
+      setPositions(data.positions || []);
+      setPendingOrders(data.pendingOrders || []);
+      showFeedback('success', `قیمت به ${targetPrice} بروزرسانی شد و سود/زیان معاملات باز محاسبه گردید.`);
+    } catch (err: any) {
+      showFeedback('error', err.message);
+    } finally {
+      setSimulatingPrice(false);
     }
   };
 
@@ -188,17 +400,13 @@ export default function App() {
     return `${window.location.origin}/auth/callback`;
   }, []);
 
-  const showFeedback = (type: 'success' | 'error', message: string) => {
-    setFeedback({ type, message });
-    setTimeout(() => {
-      setFeedback((prev) => (prev?.message === message ? null : prev));
-    }, 5000);
-  };
-
-  const fetchState = async () => {
+  const fetchState = useCallback(async () => {
     try {
-      const res = await fetch('/api/ctrader/state');
-      if (!res.ok) throw new Error('خطا در دریافت وضعیت');
+      const res = await authFetch('/api/ctrader/state');
+      if (!res.ok) {
+        if (res.status === 401) return;
+        throw new Error('خطا در دریافت وضعیت');
+      }
       const data = await res.json();
       setStatus(data.status);
       const loadedSymbols: CTraderSymbol[] = data.symbols || [];
@@ -213,11 +421,32 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [authFetch, symbolId]);
 
   useEffect(() => {
-    fetchState();
-  }, []);
+    if (authUser) {
+      fetchState();
+    }
+  }, [authUser, fetchState]);
+
+  // Periodic Auto-refresh (8s)
+  useEffect(() => {
+    if (!authUser || !autoRefresh) return;
+    const timer = setInterval(() => {
+      authFetch('/api/ctrader/state')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data && data.status) {
+            setStatus(data.status);
+            setSymbols(data.symbols || []);
+            setPositions(data.positions || []);
+            setPendingOrders(data.pendingOrders || []);
+          }
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [authUser, autoRefresh, authFetch]);
 
   // Listen for OAuth completion
   useEffect(() => {
@@ -260,14 +489,8 @@ export default function App() {
     let sum = 0;
     for (const p of positions) {
       const sym = symbols.find((s) => s.symbolId === p.symbolId);
-      const curPrice = sym?.referencePrice ?? p.entryPrice;
-      const priceDiff = p.tradeSide === 'BUY' ? curPrice - p.entryPrice : p.entryPrice - curPrice;
-      const lotMultiplier =
-        sym?.lotSize && sym.lotSize > 0
-          ? sym.lotSize / (sym.pipPosition ? Math.pow(10, sym.digits - sym.pipPosition) : 1)
-          : 100_000;
-      const tradePnL = priceDiff * p.volumeLots * lotMultiplier + (p.commission || 0) + (p.swap || 0);
-      sum += isNaN(tradePnL) ? 0 : tradePnL;
+      const trade = computeTradePnL(p, sym);
+      sum += isNaN(trade.netProfit) ? 0 : trade.netProfit;
     }
     return Math.round(sum * 100) / 100;
   }, [positions, symbols]);
@@ -325,7 +548,7 @@ export default function App() {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/ctrader/sync', { method: 'POST' });
+      const res = await authFetch('/api/ctrader/sync', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'خطا در همگام‌سازی');
       setStatus(data.status);
@@ -342,7 +565,7 @@ export default function App() {
 
   const handleConnectOAuth = async () => {
     try {
-      const res = await fetch(`/api/auth/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
+      const res = await authFetch(`/api/auth/url?redirect_uri=${encodeURIComponent(redirectUri)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'خطا در ایجاد لینک اتصال OAuth');
       const win = window.open(data.url, 'ctrader_oauth', 'width=580,height=720');
@@ -362,7 +585,7 @@ export default function App() {
     }
     setSyncing(true);
     try {
-      const res = await fetch('/api/ctrader/connect-token', {
+      const res = await authFetch('/api/ctrader/connect-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken: manualToken.trim() }),
@@ -386,7 +609,7 @@ export default function App() {
   const handleAccountSelect = async (accountId: number) => {
     setSyncing(true);
     try {
-      const res = await fetch('/api/ctrader/select-account', {
+      const res = await authFetch('/api/ctrader/select-account', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ctidTraderAccountId: accountId }),
@@ -434,7 +657,7 @@ export default function App() {
           payload.stopPrice = parseFloat(entryPrice);
         }
 
-        const res = await fetch('/api/ctrader/orders/new', {
+        const res = await authFetch('/api/ctrader/orders/new', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -457,7 +680,7 @@ export default function App() {
         if (!selectedEditId) throw new Error('موردی برای ویرایش انتخاب نشده است.');
 
         if (editTargetType === 'position') {
-          const res = await fetch(`/api/ctrader/positions/${selectedEditId}`, {
+          const res = await authFetch(`/api/ctrader/positions/${selectedEditId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -473,7 +696,7 @@ export default function App() {
           setPendingOrders(data.state.pendingOrders);
           showFeedback('success', `پوزیشن #${selectedEditId} با موفقیت ویرایش شد.`);
         } else {
-          const res = await fetch(`/api/ctrader/orders/${selectedEditId}`, {
+          const res = await authFetch(`/api/ctrader/orders/${selectedEditId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -502,7 +725,7 @@ export default function App() {
 
   const handleClosePosition = async (posId: number) => {
     try {
-      const res = await fetch(`/api/ctrader/positions/${posId}/close`, { method: 'POST' });
+      const res = await authFetch(`/api/ctrader/positions/${posId}/close`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'خطا در بستن معامله');
       setStatus(data.state.status);
@@ -517,7 +740,7 @@ export default function App() {
 
   const handleCancelOrder = async (ordId: number) => {
     try {
-      const res = await fetch(`/api/ctrader/orders/${ordId}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/ctrader/orders/${ordId}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'خطا در لغو سفارش');
       setStatus(data.state.status);
@@ -563,6 +786,116 @@ export default function App() {
     setCopiedCallback(true);
     setTimeout(() => setCopiedCallback(false), 2000);
   };
+
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
+        <div className="flex items-center gap-2.5 text-blue-400">
+          <RefreshCw className="w-5 h-5 animate-spin" />
+          <span className="text-sm font-medium">در حال بررسی احراز هویت...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-center p-4 font-sans selection:bg-blue-600 selection:text-white">
+        <div className="max-w-md w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6 backdrop-blur">
+          <div className="text-center space-y-2">
+            <div className="w-12 h-12 rounded-xl bg-blue-950/80 border border-blue-800/80 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-6 h-6" />
+            </div>
+            <h1 className="text-lg font-bold text-white tracking-tight">ورود به میز معاملاتی cTrader</h1>
+            <p className="text-xs text-slate-400">
+              جهت دسترسی به پنل و مدیریت حساب، نام کاربری و رمز عبور را وارد نمایید.
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="bg-rose-950/70 border border-rose-800/80 text-rose-200 text-xs px-3.5 py-2.5 rounded-lg flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">نام کاربری (Username)</label>
+              <div className="relative">
+                <User className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={loginUsername}
+                  onChange={(e) => setLoginUsername(e.target.value)}
+                  placeholder="مثال: admin"
+                  dir="ltr"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pr-9 pl-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500 font-mono transition-colors"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1.5">رمز عبور (Password)</label>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type={loginShowPassword ? 'text' : 'password'}
+                  required
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••"
+                  dir="ltr"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg pr-9 pl-9 py-2 text-xs text-slate-100 focus:outline-none focus:border-blue-500 font-mono transition-colors"
+                />
+                <button
+                  type="button"
+                  onClick={() => setLoginShowPassword(!loginShowPassword)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  {loginShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginSubmitting}
+              className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 shadow-md"
+            >
+              {loginSubmitting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  <span>در حال بررسی هویت...</span>
+                </>
+              ) : (
+                <>
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>ورود به سامانه</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Environmental Variable Info Banner */}
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 text-[11px] text-slate-400 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-blue-400 font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>احراز هویت با متغیرهای محیطی</span>
+            </div>
+            <p className="leading-relaxed">
+              نام کاربری و رمز عبور از متغیرهای <code className="text-slate-200 font-mono bg-slate-900 px-1 py-0.5 rounded">AUTH_USERNAME</code> و <code className="text-slate-200 font-mono bg-slate-900 px-1 py-0.5 rounded">AUTH_PASSWORD</code> در محیط یا فایل <code className="text-slate-200 font-mono bg-slate-900 px-1 py-0.5 rounded">.env</code> خوانده می‌شوند.
+            </p>
+            <p className="text-slate-500 text-[10px]">
+              پیش‌فرض سیستم: <span className="font-mono text-slate-300">admin</span> / <span className="font-mono text-slate-300">admin123</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
@@ -612,6 +945,21 @@ export default function App() {
             </select>
           )}
 
+          {/* Auto Refresh Toggle */}
+          <button
+            type="button"
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${
+              autoRefresh
+                ? 'bg-emerald-950/40 border-emerald-800/80 text-emerald-300'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+            }`}
+            title={autoRefresh ? 'بروزرسانی خودکار فعال است (هر ۸ ثانیه)' : 'بروزرسانی خودکار غیرفعال'}
+          >
+            <Activity className={`w-3.5 h-3.5 ${autoRefresh ? 'text-emerald-400 animate-pulse' : ''}`} />
+            <span className="hidden md:inline">{autoRefresh ? 'زنده' : 'ثابت'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleSync}
@@ -631,6 +979,24 @@ export default function App() {
             <Sliders className="w-3.5 h-3.5" />
             <span>تنظیمات حساب</span>
           </button>
+
+          {/* User Profile & Logout */}
+          <div className="flex items-center gap-1.5 pr-2 border-r border-slate-800">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900/90 border border-slate-800 rounded-lg text-xs text-slate-300">
+              <User className="w-3.5 h-3.5 text-blue-400" />
+              <span className="font-mono text-[11px]">{authUser.username}</span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-rose-900/50 rounded-lg transition-colors"
+              title="خروج از حساب کاربری"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">خروج</span>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -1036,6 +1402,25 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowPriceSimulator(!showPriceSimulator);
+                  setSimSymbolId(symbolId);
+                  const sym = symbols.find((s) => s.symbolId === symbolId);
+                  if (sym) setSimPriceInput(sym.referencePrice.toString());
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs border rounded-lg transition-colors cursor-pointer ${
+                  showPriceSimulator
+                    ? 'bg-blue-950/70 border-blue-700 text-blue-300'
+                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+                title="شبیه‌سازی تغییر قیمت نماد و بررسی تغییرات سود و زیان"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+                <span className="hidden sm:inline">شبیه‌سازی قیمت</span>
+              </button>
+
               <div className="relative">
                 <Search className="w-3.5 h-3.5 text-slate-500 absolute right-2.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -1064,6 +1449,93 @@ export default function App() {
             </div>
           </div>
 
+          {/* Quick Price Simulation Panel (For testing PnL in sandbox & live) */}
+          {showPriceSimulator && (
+            <div className="bg-slate-950/90 border border-blue-900/60 rounded-xl p-3 text-xs space-y-2.5 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between pb-1.5 border-b border-slate-900">
+                <div className="flex items-center gap-1.5 text-blue-300 font-semibold">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
+                  <span>شبیه‌ساز قیمت نماد (تست تغییر سود و ضرر پوزیشن‌ها)</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPriceSimulator(false)}
+                  className="text-slate-500 hover:text-white"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={simSymbolId}
+                  onChange={(e) => {
+                    const sid = Number(e.target.value);
+                    setSimSymbolId(sid);
+                    const s = symbols.find((item) => item.symbolId === sid);
+                    if (s) setSimPriceInput(s.referencePrice.toString());
+                  }}
+                  className="bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 font-mono focus:outline-none"
+                >
+                  {symbols.map((s) => (
+                    <option key={s.symbolId} value={s.symbolId}>
+                      {s.symbolName} (قیمت: {s.referencePrice})
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  type="number"
+                  step="any"
+                  value={simPriceInput}
+                  onChange={(e) => setSimPriceInput(e.target.value)}
+                  placeholder="قیمت جدید"
+                  dir="ltr"
+                  className="w-32 bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs font-mono text-white focus:outline-none focus:border-blue-500"
+                />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const val = parseFloat(simPriceInput);
+                    if (!isNaN(val) && val > 0) handleUpdatePrice(val);
+                  }}
+                  disabled={simulatingPrice || !simPriceInput}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  {simulatingPrice ? '...' : 'اعمال قیمت'}
+                </button>
+
+                <div className="flex items-center gap-1 pr-2 border-r border-slate-800">
+                  <span className="text-[10px] text-slate-500">نوسان:</span>
+                  {[-10, -5, +5, +10].map((deltaPips) => {
+                    const currentSym = symbols.find((s) => s.symbolId === simSymbolId);
+                    const pipSize = currentSym?.pipPosition !== undefined ? Math.pow(10, -currentSym.pipPosition) : 0.0001;
+                    const target = currentSym ? Number((currentSym.referencePrice + deltaPips * pipSize).toFixed(currentSym.digits)) : 0;
+                    return (
+                      <button
+                        key={deltaPips}
+                        type="button"
+                        onClick={() => {
+                          setSimPriceInput(target.toString());
+                          handleUpdatePrice(target);
+                        }}
+                        disabled={simulatingPrice || !currentSym}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer ${
+                          deltaPips > 0
+                            ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-400 border border-emerald-800/60'
+                            : 'bg-rose-950 hover:bg-rose-900 text-rose-400 border border-rose-800/60'
+                        }`}
+                      >
+                        {deltaPips > 0 ? `+${deltaPips}p` : `${deltaPips}p`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Tab 1: Open Positions */}
           {activeTab === 'positions' && (
             <div>
@@ -1080,59 +1552,117 @@ export default function App() {
                       <tr className="border-b border-slate-800/80 text-slate-400 font-medium">
                         <th className="py-2 px-2.5">نماد</th>
                         <th className="py-2 px-2.5">جهت / حجم</th>
-                        <th className="py-2 px-2.5">ورود</th>
+                        <th className="py-2 px-2.5">قیمت ورود</th>
+                        <th className="py-2 px-2.5">قیمت لحظه‌ای</th>
+                        <th className="py-2 px-2.5">سود / زیان (P&L)</th>
                         <th className="py-2 px-2.5">حد ضرر</th>
                         <th className="py-2 px-2.5">حد سود</th>
                         <th className="py-2 px-2.5 text-left">عملیات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/40">
-                      {filteredPositions.map((p) => (
-                        <tr
-                          key={p.positionId}
-                          className={`hover:bg-slate-800/30 transition-colors ${
-                            selectedEditId === p.positionId && formMode === 'edit' ? 'bg-blue-950/20' : ''
-                          }`}
-                        >
-                          <td className="py-2.5 px-2.5">
-                            <span className="font-bold text-white">{p.symbolName}</span>
-                            <span className="block text-[10px] text-slate-500 font-mono">#{p.positionId}</span>
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono">
-                            <span className={p.tradeSide === 'BUY' ? 'text-emerald-400 font-semibold' : 'text-rose-400 font-semibold'}>
-                              {p.tradeSide}
-                            </span>
-                            <span className="text-slate-400 mr-1.5">{p.volumeLots.toFixed(2)} Lot</span>
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono text-slate-200" dir="ltr">
-                            {p.entryPrice}
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono text-rose-400" dir="ltr">
-                            {p.stopLoss ?? '—'}
-                          </td>
-                          <td className="py-2.5 px-2.5 font-mono text-emerald-400" dir="ltr">
-                            {p.takeProfit ?? '—'}
-                          </td>
-                          <td className="py-2.5 px-2.5 text-left">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => loadPositionIntoEdit(p)}
-                                className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] transition-colors"
+                      {filteredPositions.map((p) => {
+                        const sym = symbols.find((s) => s.symbolId === p.symbolId);
+                        const trade = computeTradePnL(p, sym);
+                        const isProfit = trade.netProfit > 0;
+                        const isLoss = trade.netProfit < 0;
+                        const digits = sym?.digits ?? 2;
+
+                        return (
+                          <tr
+                            key={p.positionId}
+                            className={`hover:bg-slate-800/30 transition-colors ${
+                              selectedEditId === p.positionId && formMode === 'edit' ? 'bg-blue-950/20' : ''
+                            }`}
+                          >
+                            <td className="py-2.5 px-2.5">
+                              <span className="font-bold text-white text-xs">{p.symbolName}</span>
+                              <span className="block text-[10px] text-slate-500 font-mono">#{p.positionId}</span>
+                            </td>
+                            <td className="py-2.5 px-2.5 font-mono">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                  p.tradeSide === 'BUY'
+                                    ? 'bg-emerald-950 text-emerald-400 border border-emerald-800/60'
+                                    : 'bg-rose-950 text-rose-400 border border-rose-800/60'
+                                }`}
                               >
-                                ویرایش
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => handleClosePosition(p.positionId)}
-                                className="px-2 py-1 bg-rose-950/80 hover:bg-rose-900 border border-rose-800/60 text-rose-300 rounded text-[11px] transition-colors"
-                              >
-                                بستن
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                                {p.tradeSide}
+                              </span>
+                              <span className="text-slate-300 font-medium mr-1.5 text-xs">{p.volumeLots.toFixed(2)} Lot</span>
+                            </td>
+                            <td className="py-2.5 px-2.5 font-mono text-slate-200 text-xs" dir="ltr">
+                              {p.entryPrice.toFixed(digits)}
+                            </td>
+                            <td className="py-2.5 px-2.5 font-mono text-xs" dir="ltr">
+                              <span className="text-slate-100 font-bold">{trade.currentPrice.toFixed(digits)}</span>
+                            </td>
+                            <td className="py-2.5 px-2.5">
+                              <div className="flex flex-col items-start gap-0.5">
+                                <div className="flex items-center gap-1.5 font-mono">
+                                  <span
+                                    className={`font-bold text-xs tabular-nums ${
+                                      isProfit
+                                        ? 'text-emerald-400'
+                                        : isLoss
+                                        ? 'text-rose-400'
+                                        : 'text-slate-300'
+                                    }`}
+                                    dir="ltr"
+                                  >
+                                    {isProfit ? `+${trade.netProfit.toFixed(2)}` : trade.netProfit.toFixed(2)} {currentCurrency}
+                                  </span>
+                                  <span
+                                    className={`px-1 py-0.2 rounded text-[10px] font-mono font-semibold ${
+                                      isProfit
+                                        ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
+                                        : isLoss
+                                        ? 'bg-rose-950/80 text-rose-400 border border-rose-800/80'
+                                        : 'bg-slate-900 text-slate-400'
+                                    }`}
+                                    dir="ltr"
+                                  >
+                                    {trade.pips > 0 ? `+${trade.pips}` : trade.pips} pip
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 text-[10px] text-slate-500 font-mono">
+                                  <span>{trade.pct > 0 ? `+${trade.pct}%` : `${trade.pct}%`}</span>
+                                  {(p.commission !== 0 || p.swap !== 0) && (
+                                    <>
+                                      <span>•</span>
+                                      <span>ک: {p.commission.toFixed(2)}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-2.5 px-2.5 font-mono text-rose-400 text-xs" dir="ltr">
+                              {p.stopLoss !== null ? p.stopLoss.toFixed(digits) : '—'}
+                            </td>
+                            <td className="py-2.5 px-2.5 font-mono text-emerald-400 text-xs" dir="ltr">
+                              {p.takeProfit !== null ? p.takeProfit.toFixed(digits) : '—'}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-left">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => loadPositionIntoEdit(p)}
+                                  className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-[11px] transition-colors"
+                                >
+                                  ویرایش
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleClosePosition(p.positionId)}
+                                  className="px-2 py-1 bg-rose-950/80 hover:bg-rose-900 border border-rose-800/60 text-rose-300 rounded text-[11px] transition-colors"
+                                >
+                                  بستن
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

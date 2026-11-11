@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import dns from 'dns';
 import https from 'https';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
 import WebSocket from 'ws';
 
@@ -74,12 +75,68 @@ export interface CTraderPosition {
   volumeLots: number;
   volumeProtocol: number;
   entryPrice: number;
+  currentPrice: number;
+  grossProfit: number;
+  netProfit: number;
+  pips: number;
   stopLoss: number | null;
   takeProfit: number | null;
   swap: number;
   commission: number;
   comment: string;
   openTimestamp: number;
+}
+
+export function computePositionPnL(
+  pos: {
+    symbolId: number;
+    symbolName?: string;
+    tradeSide: 'BUY' | 'SELL';
+    volumeLots: number;
+    entryPrice: number;
+    commission?: number;
+    swap?: number;
+  },
+  symbol?: CTraderSymbol,
+  overridePrice?: number
+) {
+  const currentPrice = overridePrice !== undefined && overridePrice > 0
+    ? overridePrice
+    : (symbol?.referencePrice ?? pos.entryPrice);
+  const priceDiff = pos.tradeSide === 'BUY'
+    ? currentPrice - pos.entryPrice
+    : pos.entryPrice - currentPrice;
+
+  const upper = (symbol?.symbolName || pos.symbolName || '').toUpperCase();
+  let unitsPerLot = 100_000;
+  if (upper.includes('XAU')) unitsPerLot = 100;
+  else if (upper.includes('XAG')) unitsPerLot = 5000;
+  else if (
+    upper.includes('BTC') ||
+    upper.includes('ETH') ||
+    upper.includes('US30') ||
+    upper.includes('NAS') ||
+    upper.includes('USTEC') ||
+    upper.includes('US500') ||
+    upper.includes('DE40')
+  ) {
+    unitsPerLot = 1;
+  }
+
+  const grossProfit = Number((priceDiff * pos.volumeLots * unitsPerLot).toFixed(2));
+  const netProfit = Number((grossProfit + (pos.commission || 0) + (pos.swap || 0)).toFixed(2));
+
+  const pipMultiplier = symbol?.pipPosition !== undefined
+    ? Math.pow(10, symbol.pipPosition)
+    : (symbol?.digits ? Math.pow(10, symbol.digits - 1) : 10000);
+  const pips = Number((priceDiff * pipMultiplier).toFixed(1));
+
+  return {
+    currentPrice,
+    grossProfit,
+    netProfit,
+    pips,
+  };
 }
 
 export interface CTraderPendingOrder {
@@ -711,18 +768,39 @@ class CTraderManager {
           const symObj = symbolObjMap.get(symId);
           const volProto = Number(p.tradeData?.volume || 0);
           const side = p.tradeData?.tradeSide === 2 || p.tradeData?.tradeSide === 'SELL' ? 'SELL' : 'BUY';
+          const volLots = protocolVolumeToLots(volProto, symObj);
+          const entryPrice = Number(p.price || 0);
+          const commission = Number(p.commission || 0) / 100;
+          const swap = Number(p.swap || 0) / 100;
+          const pnl = computePositionPnL(
+            {
+              symbolId: symId,
+              symbolName: symObj?.symbolName,
+              tradeSide: side,
+              volumeLots: volLots,
+              entryPrice,
+              commission,
+              swap,
+            },
+            symObj
+          );
+
           return {
             positionId: Number(p.positionId),
             symbolId: symId,
             symbolName: symObj?.symbolName || `SYM#${symId}`,
             tradeSide: side,
-            volumeLots: protocolVolumeToLots(volProto, symObj),
+            volumeLots: volLots,
             volumeProtocol: volProto,
-            entryPrice: Number(p.price || 0),
+            entryPrice,
+            currentPrice: pnl.currentPrice,
+            grossProfit: pnl.grossProfit,
+            netProfit: pnl.netProfit,
+            pips: pnl.pips,
             stopLoss: p.stopLoss ? Number(p.stopLoss) : null,
             takeProfit: p.takeProfit ? Number(p.takeProfit) : null,
-            swap: Number(p.swap || 0) / 100,
-            commission: Number(p.commission || 0) / 100,
+            swap,
+            commission,
             comment: String(p.tradeData?.comment || ''),
             openTimestamp: Number(p.tradeData?.openTimestamp || Date.now()),
           };
@@ -755,22 +833,44 @@ class CTraderManager {
       });
 
       this.lastError = null;
-      return {
-        symbols: this.symbols,
-        positions: this.positions,
-        pendingOrders: this.pendingOrders,
-      };
+      return this.getStateSnapshot();
     } catch (err: any) {
       this.lastError = err.message;
       throw err;
     }
   }
 
+  public updateSymbolPrice(symbolId: number, price: number): boolean {
+    const sym = this.symbols.find((s) => s.symbolId === symbolId);
+    if (sym && price > 0) {
+      sym.referencePrice = price;
+      return true;
+    }
+    return false;
+  }
+
   public getStateSnapshot() {
+    const symbolMap = new Map<number, CTraderSymbol>();
+    for (const s of this.symbols) {
+      symbolMap.set(s.symbolId, s);
+    }
+
+    const enrichedPositions: CTraderPosition[] = this.positions.map((p) => {
+      const sym = symbolMap.get(p.symbolId);
+      const pnl = computePositionPnL(p, sym);
+      return {
+        ...p,
+        currentPrice: pnl.currentPrice,
+        grossProfit: pnl.grossProfit,
+        netProfit: pnl.netProfit,
+        pips: pnl.pips,
+      };
+    });
+
     return {
       status: this.getCredentialsStatus(),
       symbols: this.symbols,
-      positions: this.positions,
+      positions: enrichedPositions,
       pendingOrders: this.pendingOrders,
     };
   }
@@ -792,6 +892,20 @@ class CTraderManager {
 
     if (this.mode === 'sandbox') {
       if (params.orderType === 'MARKET') {
+        const commission = Number((-7 * params.volumeLots).toFixed(2));
+        const pnl = computePositionPnL(
+          {
+            symbolId: symbol.symbolId,
+            symbolName: symbol.symbolName,
+            tradeSide: params.tradeSide,
+            volumeLots: Number(params.volumeLots),
+            entryPrice: symbol.referencePrice,
+            commission,
+            swap: 0,
+          },
+          symbol
+        );
+
         const newPos: CTraderPosition = {
           positionId: Math.floor(78500000 + Math.random() * 900000),
           symbolId: symbol.symbolId,
@@ -800,10 +914,14 @@ class CTraderManager {
           volumeLots: Number(params.volumeLots),
           volumeProtocol,
           entryPrice: symbol.referencePrice,
+          currentPrice: pnl.currentPrice,
+          grossProfit: pnl.grossProfit,
+          netProfit: pnl.netProfit,
+          pips: pnl.pips,
           stopLoss: params.stopLoss ? Number(params.stopLoss) : null,
           takeProfit: params.takeProfit ? Number(params.takeProfit) : null,
           swap: 0,
-          commission: Number((-7 * params.volumeLots).toFixed(2)),
+          commission,
           comment: params.comment || '',
           openTimestamp: Date.now(),
         };
@@ -1052,12 +1170,8 @@ class CTraderManager {
       if (idx === -1) throw new Error('پوزیشن مورد نظر یافت نشد.');
       const removed = this.positions.splice(idx, 1)[0];
       const sym = this.symbols.find((s) => s.symbolId === removed.symbolId);
-      const currentPrice = sym?.referencePrice ?? removed.entryPrice;
-      const priceDiff = removed.tradeSide === 'BUY'
-        ? (currentPrice - removed.entryPrice)
-        : (removed.entryPrice - currentPrice);
-      const lotMultiplier = sym?.lotSize && sym.lotSize > 0 ? (sym.lotSize / (sym.pipPosition ? Math.pow(10, sym.digits - sym.pipPosition) : 1)) : 100_000;
-      const profit = Number((priceDiff * removed.volumeLots * lotMultiplier + (removed.commission || 0) + (removed.swap || 0)).toFixed(2));
+      const pnl = computePositionPnL(removed, sym);
+      const profit = pnl.netProfit;
       this.sandboxBalance = Math.max(0, Number((this.sandboxBalance + (isNaN(profit) ? 0 : profit)).toFixed(2)));
       this.persistConfig();
       return { type: 'POSITION_CLOSED', item: removed, profit, balance: this.sandboxBalance };
@@ -1137,8 +1251,102 @@ async function startServer() {
 
   app.use(express.json());
 
-  // 1. OAuth Authorization URL endpoint
-  app.get('/api/auth/url', (req, res) => {
+  // --- Secure Environment Variable Authentication ---
+  const validAuthTokens = new Map<string, { username: string; expiresAt: number }>();
+
+  function generateAuthToken(username: string): string {
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days validity
+    validAuthTokens.set(token, { username, expiresAt });
+    return token;
+  }
+
+  function verifyAuthToken(token?: string): { valid: boolean; username?: string } {
+    if (!token) return { valid: false };
+    const session = validAuthTokens.get(token);
+    if (!session) return { valid: false };
+    if (Date.now() > session.expiresAt) {
+      validAuthTokens.delete(token);
+      return { valid: false };
+    }
+    return { valid: true, username: session.username };
+  }
+
+  const requireAuth: express.RequestHandler = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : ((req.headers['x-auth-token'] as string) || (req.query.auth_token as string));
+
+    const check = verifyAuthToken(token);
+    if (!check.valid) {
+      res.status(401).json({
+        error: 'ابتدا وارد حساب کاربری شوید.',
+        code: 'UNAUTHORIZED',
+      });
+      return;
+    }
+    (req as any).user = { username: check.username };
+    next();
+  };
+
+  // Auth Endpoints (Public)
+  app.post('/api/auth/login', (req, res) => {
+    const { username, password } = req.body || {};
+    const expectedUsername = (process.env.AUTH_USERNAME || 'admin').trim();
+    const expectedPassword = process.env.AUTH_PASSWORD || 'admin123';
+
+    if (!username || !password) {
+      res.status(400).json({ error: 'نام کاربری و رمز عبور الزامی است.' });
+      return;
+    }
+
+    const trimmedUser = String(username).trim();
+    const inputPass = String(password);
+
+    if (trimmedUser === expectedUsername && inputPass === expectedPassword) {
+      const token = generateAuthToken(trimmedUser);
+      res.json({
+        success: true,
+        token,
+        user: { username: trimmedUser },
+      });
+    } else {
+      res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است.' });
+    }
+  });
+
+  app.get('/api/auth/me', (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : (req.headers['x-auth-token'] as string);
+
+    const check = verifyAuthToken(token);
+    if (check.valid) {
+      res.json({ authenticated: true, user: { username: check.username } });
+    } else {
+      res.json({ authenticated: false });
+    }
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7).trim()
+      : (req.headers['x-auth-token'] as string);
+
+    if (token) {
+      validAuthTokens.delete(token);
+    }
+    res.json({ success: true });
+  });
+
+  // Protect all /api/ctrader routes with authentication
+  app.use('/api/ctrader', requireAuth);
+
+  // 1. OAuth Authorization URL endpoint (protected)
+  app.get('/api/auth/url', requireAuth, (req, res) => {
     const creds = ctraderManager.getCredentialsStatus();
     const clientId = (ctraderManager as any).clientId || process.env.CTRADER_CLIENT_ID;
     if (!clientId) {
@@ -1479,6 +1687,26 @@ function requestCTraderToken(tokenUrl: string): Promise<any> {
         return;
       }
       ctraderManager.setSandboxBalance(amount);
+      res.json(ctraderManager.getStateSnapshot());
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 6.2. Update Symbol Reference Price (For live simulation & testing)
+  app.post('/api/ctrader/symbol/price', (req, res) => {
+    try {
+      const { symbolId, price } = req.body;
+      const parsedPrice = parseFloat(price);
+      if (isNaN(parsedPrice) || parsedPrice <= 0) {
+        res.status(400).json({ error: 'قیمت نماد باید بزرگتر از صفر باشد.' });
+        return;
+      }
+      const success = ctraderManager.updateSymbolPrice(Number(symbolId), parsedPrice);
+      if (!success) {
+        res.status(404).json({ error: 'نماد مورد نظر یافت نشد.' });
+        return;
+      }
       res.json(ctraderManager.getStateSnapshot());
     } catch (err: any) {
       res.status(400).json({ error: err.message });

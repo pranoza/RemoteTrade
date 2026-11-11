@@ -19,6 +19,8 @@ ENV PORT=3000
 ENV CTRADER_CLIENT_ID=""
 ENV CTRADER_CLIENT_SECRET=""
 ENV CTRADER_ACCESS_TOKEN=""
+ENV AUTH_USERNAME="admin"
+ENV AUTH_PASSWORD="admin123"
 
 COPY package*.json ./
 RUN npm install --omit=dev --legacy-peer-deps
