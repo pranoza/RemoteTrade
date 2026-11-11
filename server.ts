@@ -1214,7 +1214,7 @@ async function startServer() {
     });
   }
 
-  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const port = 3000;
   app.listen(port, '0.0.0.0', () => {
     console.log(`cTrader Order Desk server running on http://0.0.0.0:${port}`);
   });

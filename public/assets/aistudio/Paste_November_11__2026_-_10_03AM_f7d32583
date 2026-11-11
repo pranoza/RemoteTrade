@@ -1,0 +1,929 @@
+2026-Nov-09 08:31:27
+#23 copy /root/.cache
+2026-Nov-09 08:31:27
+#23 DONE 0.2s
+2026-Nov-09 08:31:27
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:32:10
+#8 501.7 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+2026-Nov-09 08:32:13
+#8 ...
+2026-Nov-09 08:32:13
+2026-Nov-09 08:32:13
+#24 copy /app
+2026-Nov-09 08:32:13
+#24 DONE 0.7s
+2026-Nov-09 08:32:13
+#25 copy /app/node_modules
+2026-Nov-09 08:32:31
+#25 DONE 19.7s
+2026-Nov-09 08:32:31
+2026-Nov-09 08:32:31
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:33:14
+#8 565.9 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+2026-Nov-09 08:34:18
+#8 630.0 Err:1 http://deb.debian.org/debian trixie InRelease
+2026-Nov-09 08:34:18
+#8 630.0   Connection failed [IP: 151.101.66.132 80]
+2026-Nov-09 08:34:18
+#8 630.0   Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:34:18
+#8 630.0   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:35:19
+#8 690.2 Err:2 http://deb.debian.org/debian trixie-updates InRelease
+2026-Nov-09 08:35:19
+#8 690.2   Connection failed [IP: 151.101.130.132 80]
+2026-Nov-09 08:35:19
+#8 690.2   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:35:19
+#8 690.2   Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:19
+#8 750.5 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
+2026-Nov-09 08:36:19
+#8 750.5   Connection failed [IP: 151.101.130.132 80]
+2026-Nov-09 08:36:19
+#8 750.5   Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:19
+#8 750.5   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:19
+#8 750.5 Reading package lists...
+2026-Nov-09 08:36:19
+#8 750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:19
+#8 750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:19
+#8 750.7 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:19
+#8 750.7 W: Some index files failed to download. They have been ignored, or old ones used instead.
+2026-Nov-09 08:36:19
+#8 750.9 Reading package lists...
+2026-Nov-09 08:36:20
+#8 751.0 Building dependency tree...
+2026-Nov-09 08:36:20
+#8 751.0 Reading state information...
+2026-Nov-09 08:36:20
+#8 751.1 E: Unable to locate package curl
+2026-Nov-09 08:36:20
+#8 751.1 E: Unable to locate package libatomic1
+2026-Nov-09 08:36:20
+#8 751.1 E: Unable to locate package wget
+2026-Nov-09 08:36:20
+#8 ERROR: process "sh -c apt-get update && apt-get install -y curl libatomic1 wget" did not complete successfully: exit code: 100
+2026-Nov-09 08:36:20
+------
+2026-Nov-09 08:36:20
+> install apt packages: curl libatomic1 wget:
+2026-Nov-09 08:36:20
+750.5   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:20
+750.5 Reading package lists...
+2026-Nov-09 08:36:20
+750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:20
+750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:20
+750.7 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:20
+750.7 W: Some index files failed to download. They have been ignored, or old ones used instead.
+2026-Nov-09 08:36:20
+2026-Nov-09 08:36:20
+751.1 E: Unable to locate package curl
+2026-Nov-09 08:36:20
+751.1 E: Unable to locate package libatomic1
+2026-Nov-09 08:36:20
+751.1 E: Unable to locate package wget
+2026-Nov-09 08:36:20
+------
+2026-Nov-09 08:36:20
+ERROR: failed to build: failed to solve: process "sh -c apt-get update && apt-get install -y curl libatomic1 wget" did not complete successfully: exit code: 100
+2026-Nov-09 08:36:22
+========================================
+2026-Nov-09 08:36:22
+Deployment failed: Command execution failed (exit code 1): docker exec cbogeeqssbc8t0kblpur5vzh bash -c 'bash /artifacts/build.sh'
+2026-Nov-09 08:36:22
+Error: #0 building with "coolify-railpack" instance using docker-container driver
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#1 resolve image config for docker-image://ghcr.io/railwayapp/railpack-frontend:v0.43.0
+2026-Nov-09 08:36:22
+#1 DONE 7.8s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#2 docker-image://ghcr.io/railwayapp/railpack-frontend:v0.43.0@sha256:355ef61fae6f2551103cd8b10c710cb07167dd353d561f15c69b8d7ac1c676cc
+2026-Nov-09 08:36:22
+#2 resolve ghcr.io/railwayapp/railpack-frontend:v0.43.0@sha256:355ef61fae6f2551103cd8b10c710cb07167dd353d561f15c69b8d7ac1c676cc 0.1s done
+2026-Nov-09 08:36:22
+#2 DONE 0.1s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#2 docker-image://ghcr.io/railwayapp/railpack-frontend:v0.43.0@sha256:355ef61fae6f2551103cd8b10c710cb07167dd353d561f15c69b8d7ac1c676cc
+2026-Nov-09 08:36:22
+#2 DONE 0.5s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#2 docker-image://ghcr.io/railwayapp/railpack-frontend:v0.43.0@sha256:355ef61fae6f2551103cd8b10c710cb07167dd353d561f15c69b8d7ac1c676cc
+2026-Nov-09 08:36:22
+#2 sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 0B / 8.91MB 0.2s
+2026-Nov-09 08:36:22
+#2 sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5 0B / 3.85MB 0.2s
+2026-Nov-09 08:36:22
+#2 sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 1.05MB / 8.91MB 0.8s
+2026-Nov-09 08:36:22
+#2 sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 3.15MB / 8.91MB 0.9s
+2026-Nov-09 08:36:22
+#2 sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 8.01MB / 8.91MB 1.1s
+2026-Nov-09 08:36:22
+#2 sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 8.91MB / 8.91MB 1.2s
+2026-Nov-09 08:36:22
+#2 sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5 1.05MB / 3.85MB 1.2s
+2026-Nov-09 08:36:22
+#2 sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 8.91MB / 8.91MB 1.5s done
+2026-Nov-09 08:36:22
+#2 sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5 3.85MB / 3.85MB 1.4s
+2026-Nov-09 08:36:22
+#2 sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5 3.85MB / 3.85MB 1.5s done
+2026-Nov-09 08:36:22
+#2 DONE 2.2s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#2 docker-image://ghcr.io/railwayapp/railpack-frontend:v0.43.0@sha256:355ef61fae6f2551103cd8b10c710cb07167dd353d561f15c69b8d7ac1c676cc
+2026-Nov-09 08:36:22
+#2 extracting sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5
+2026-Nov-09 08:36:22
+#2 extracting sha256:e2de96513ba9eb53b431787ec8a65cdde380ac4772a3e4c4b714dcfde2a102b5 0.7s done
+2026-Nov-09 08:36:22
+#2 extracting sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986
+2026-Nov-09 08:36:22
+#2 extracting sha256:4244b6aabb89e758bc5359d8505349343df7c4c3a2d744fa17cdd83938af0986 0.8s done
+2026-Nov-09 08:36:22
+#2 DONE 3.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#3 load build definition from railpack-plan.json
+2026-Nov-09 08:36:22
+#3 transferring dockerfile:
+2026-Nov-09 08:36:22
+#3 transferring dockerfile: 4.60kB 0.0s done
+2026-Nov-09 08:36:22
+#3 DONE 0.2s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#4 [railpack] secrets hash
+2026-Nov-09 08:36:22
+#4 DONE 0.0s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#5 loading .
+2026-Nov-09 08:36:22
+#5 DONE 0.0s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 resolve ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 resolve ghcr.io/railwayapp/railpack-builder:mise-2026.10.14 3.6s done
+2026-Nov-09 08:36:22
+#6 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#7 docker-image://ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14
+2026-Nov-09 08:36:22
+#7 resolve ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14 4.3s done
+2026-Nov-09 08:36:22
+#7 DONE 4.3s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#7 docker-image://ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14
+2026-Nov-09 08:36:22
+#7 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#4 [railpack] secrets hash
+2026-Nov-09 08:36:22
+#4 DONE 1.1s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#5 loading .
+2026-Nov-09 08:36:22
+#5 transferring context: 171.54kB 0.1s done
+2026-Nov-09 08:36:22
+#5 DONE 1.4s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#7 docker-image://ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14
+2026-Nov-09 08:36:22
+#7 DONE 5.2s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#7 docker-image://ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14
+2026-Nov-09 08:36:22
+#7 sha256:75dc09925ca146a3efecc887098f8f1313da0fb1b0c8d36d628b6cae320665ec 0B / 7.39MB 0.2s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 0B / 29.84MB 0.2s
+2026-Nov-09 08:36:22
+#7 sha256:75dc09925ca146a3efecc887098f8f1313da0fb1b0c8d36d628b6cae320665ec 4.19MB / 7.39MB 0.5s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 4.19MB / 29.84MB 0.5s
+2026-Nov-09 08:36:22
+#7 sha256:75dc09925ca146a3efecc887098f8f1313da0fb1b0c8d36d628b6cae320665ec 7.39MB / 7.39MB 0.6s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 9.44MB / 29.84MB 0.6s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 14.68MB / 29.84MB 0.8s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 17.83MB / 29.84MB 0.9s
+2026-Nov-09 08:36:22
+#7 sha256:75dc09925ca146a3efecc887098f8f1313da0fb1b0c8d36d628b6cae320665ec 7.39MB / 7.39MB 1.0s done
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 23.42MB / 29.84MB 1.1s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 28.77MB / 29.84MB 1.2s
+2026-Nov-09 08:36:22
+#7 sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 29.84MB / 29.84MB 2.0s done
+2026-Nov-09 08:36:22
+#7 DONE 7.4s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 sha256:193926ad1d06489b7487e8ac4ae2d0874e6ff05cf65d874d2af508830fc03def 119B / 119B 1.0s done
+2026-Nov-09 08:36:22
+#6 sha256:df614908d6aba31e983953b17fd48496d27425529b3947c3d5583c4cc9c15c9a 868.40kB / 868.40kB 0.9s done
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 19.72MB / 237.08MB 0.9s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 0B / 53.72MB 0.2s
+2026-Nov-09 08:36:22
+#6 sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0B / 32B 0.2s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 0B / 67.81MB 0.2s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 4.12MB / 53.72MB 0.6s
+2026-Nov-09 08:36:22
+#6 sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 32B / 32B 0.6s done
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 7.34MB / 53.72MB 0.8s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 0B / 25.64MB 0.2s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 35.65MB / 237.08MB 1.7s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 13.63MB / 53.72MB 0.9s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 20.97MB / 53.72MB 1.2s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 6.66MB / 67.81MB 1.2s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 49.28MB / 237.08MB 2.1s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 25.17MB / 53.72MB 1.4s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 29.36MB / 53.72MB 1.5s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 12.58MB / 67.81MB 1.4s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 2.10MB / 25.64MB 0.9s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 61.87MB / 237.08MB 2.6s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 33.55MB / 53.72MB 1.7s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 25.17MB / 67.81MB 1.7s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 5.24MB / 25.64MB 1.1s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 36.70MB / 53.72MB 2.0s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 7.34MB / 25.64MB 1.2s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 8.74MB / 25.64MB 1.4s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 39.94MB / 53.72MB 2.3s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 30.41MB / 67.81MB 2.1s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 10.49MB / 25.64MB 1.5s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 14.68MB / 25.64MB 1.7s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 42.99MB / 53.72MB 2.4s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 38.00MB / 67.81MB 2.4s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 17.83MB / 25.64MB 1.8s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 75.50MB / 237.08MB 3.3s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 47.19MB / 53.72MB 2.6s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 20.97MB / 25.64MB 2.0s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 50.33MB / 53.72MB 2.7s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 44.04MB / 67.81MB 2.7s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 53.72MB / 53.72MB 2.9s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 25.64MB / 25.64MB 2.3s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 87.78MB / 237.08MB 3.8s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 50.33MB / 67.81MB 2.9s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 58.58MB / 67.81MB 3.0s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 65.01MB / 67.81MB 3.2s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 104.86MB / 237.08MB 4.2s
+2026-Nov-09 08:36:22
+#6 sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 25.64MB / 25.64MB 3.9s done
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 117.44MB / 237.08MB 5.7s
+2026-Nov-09 08:36:22
+#6 sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 53.72MB / 53.72MB 4.9s done
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 0B / 49.39MB 0.2s
+2026-Nov-09 08:36:22
+#6 sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 67.81MB / 67.81MB 5.0s done
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 3.15MB / 49.39MB 0.5s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 133.17MB / 237.08MB 6.4s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 12.58MB / 49.39MB 0.8s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 16.78MB / 49.39MB 1.1s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 146.80MB / 237.08MB 6.9s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 19.92MB / 49.39MB 1.2s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 27.26MB / 49.39MB 1.5s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 31.46MB / 49.39MB 1.7s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 159.38MB / 237.08MB 7.4s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 35.65MB / 49.39MB 1.8s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 40.89MB / 49.39MB 2.0s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 173.02MB / 237.08MB 7.8s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 48.23MB / 49.39MB 2.3s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 188.74MB / 237.08MB 8.3s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 202.38MB / 237.08MB 8.7s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 218.10MB / 237.08MB 9.2s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 231.74MB / 237.08MB 9.9s
+2026-Nov-09 08:36:22
+#6 sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 49.39MB / 49.39MB 4.7s done
+2026-Nov-09 08:36:22
+#6 extracting sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671
+2026-Nov-09 08:36:22
+#6 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#7 docker-image://ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14
+2026-Nov-09 08:36:22
+#7 extracting sha256:ecc510c1e359bdc007b39802570bb7e4dec7d6ebccf357c3201a74299113e05e 9.1s done
+2026-Nov-09 08:36:22
+#7 extracting sha256:75dc09925ca146a3efecc887098f8f1313da0fb1b0c8d36d628b6cae320665ec
+2026-Nov-09 08:36:22
+#7 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#7 docker-image://ghcr.io/railwayapp/railpack-runtime:mise-2026.10.14
+2026-Nov-09 08:36:22
+#7 extracting sha256:75dc09925ca146a3efecc887098f8f1313da0fb1b0c8d36d628b6cae320665ec 4.3s done
+2026-Nov-09 08:36:22
+#7 DONE 20.8s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 237.08MB / 237.08MB 15.0s
+2026-Nov-09 08:36:22
+#6 sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 237.08MB / 237.08MB 15.4s done
+2026-Nov-09 08:36:22
+#6 extracting sha256:4846f29007305297af653c57bf9b60ba8f676a38695c68d98460063442581671 8.7s done
+2026-Nov-09 08:36:22
+#6 DONE 25.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d
+2026-Nov-09 08:36:22
+#6 extracting sha256:62fe2e747f69f2f414c7e9eb1553155cf0a658398f0462557f458821dce2b29d 3.5s done
+2026-Nov-09 08:36:22
+#6 extracting sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af
+2026-Nov-09 08:36:22
+#6 extracting sha256:4dc3950125ebc9ed195e1101fc6c02e2fce113ba0f53bfb05b2cdf58747df9af 11.1s done
+2026-Nov-09 08:36:22
+#6 DONE 40.3s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1
+2026-Nov-09 08:36:22
+#6 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0.4s done
+2026-Nov-09 08:36:22
+#6 DONE 40.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d
+2026-Nov-09 08:36:22
+#6 extracting sha256:08a1e03b3da5bb4a1059032dca3216f33ddfc4a48a45db88921f5bb2e9a8fa2d 7.2s done
+2026-Nov-09 08:36:22
+#6 DONE 47.9s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f
+2026-Nov-09 08:36:22
+#6 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 62.56 Ign:1 http://deb.debian.org/debian trixie InRelease
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:604add184d03d4cf6e2ff1c4b9013b265eb9c11570afe28ce8f9dc417b98ea3f 43.7s done
+2026-Nov-09 08:36:22
+#6 DONE 91.6s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:df614908d6aba31e983953b17fd48496d27425529b3947c3d5583c4cc9c15c9a
+2026-Nov-09 08:36:22
+#6 extracting sha256:df614908d6aba31e983953b17fd48496d27425529b3947c3d5583c4cc9c15c9a 0.4s done
+2026-Nov-09 08:36:22
+#6 DONE 92.0s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#6 docker-image://ghcr.io/railwayapp/railpack-builder:mise-2026.10.14
+2026-Nov-09 08:36:22
+#6 extracting sha256:193926ad1d06489b7487e8ac4ae2d0874e6ff05cf65d874d2af508830fc03def
+2026-Nov-09 08:36:22
+#6 extracting sha256:193926ad1d06489b7487e8ac4ae2d0874e6ff05cf65d874d2af508830fc03def 0.6s done
+2026-Nov-09 08:36:22
+#6 DONE 92.5s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#9 mkdir /etc/mise
+2026-Nov-09 08:36:22
+#9 DONE 13.0s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#10 create mise config
+2026-Nov-09 08:36:22
+#10 DONE 0.4s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#11 install mise packages: bun, node
+2026-Nov-09 08:36:22
+#11 2.417 mise by @jdx – installing 2 tools
+2026-Nov-09 08:36:22
+#11 5.427 mise ░░░░░░░░░░░░░░░░ 0/2 · 3.0s
+2026-Nov-09 08:36:22
+#11 5.427   bun@1.4.4     downloading  294ms
+2026-Nov-09 08:36:22
+#11 5.427   node@24.22.1  downloading  290ms
+2026-Nov-09 08:36:22
+#11 8.427 mise ████████░░░░░░░░ 0/2 · 6.0s
+2026-Nov-09 08:36:22
+#11 8.427   bun@1.4.4     downloading  3.3s  40.0/51.8 MB · 15.3 MB/s
+2026-Nov-09 08:36:22
+#11 8.427   node@24.22.1  downloading  3.3s  38.8/58.3 MB · 14.6 MB/s
+2026-Nov-09 08:36:22
+#11 11.43 mise ████████████░░░░ 0/2 · 9.0s
+2026-Nov-09 08:36:22
+#11 11.43   bun@1.4.4     extracting   6.3s
+2026-Nov-09 08:36:22
+#11 11.43   node@24.22.1  downloading  6.3s  58.3/58.3 MB · 10.3 MB/s
+2026-Nov-09 08:36:22
+#11 14.43 mise █████████████░░░ 0/2 · 12.0s
+2026-Nov-09 08:36:22
+#11 14.43   bun@1.4.4     extracting  9.3s
+2026-Nov-09 08:36:22
+#11 14.43   node@24.22.1  extracting  9.3s
+2026-Nov-09 08:36:22
+#11 15.39 mise bun@1.4.4 1.4.4
+2026-Nov-09 08:36:22
+#11 16.55 mise ✓ bun@1.4.4     11.4s  bun-linux-x64.zip
+2026-Nov-09 08:36:22
+#11 17.43 mise ██████████████░░ 1/2 · 15.0s
+2026-Nov-09 08:36:22
+#11 17.43   node@24.22.1  extracting  12.3s
+2026-Nov-09 08:36:22
+#11 18.58 mise node@24.22.1 v24.22.1
+2026-Nov-09 08:36:22
+#11 19.14 mise node@24.22.1 11.19.1
+2026-Nov-09 08:36:22
+#11 19.41 mise ✓ node@24.22.1  14.3s  node-v24.22.1-linux-x64.tar.gz
+2026-Nov-09 08:36:22
+#11 19.42 mise ████████████████ 2/2 · installed 2 tools in 17.0s
+2026-Nov-09 08:36:22
+#11 DONE 22.3s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#12 mkdir -p /app/node_modules/.cache
+2026-Nov-09 08:36:22
+#12 DONE 1.2s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#13 copy /mise/shims
+2026-Nov-09 08:36:22
+#13 DONE 0.3s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#14 copy bun.lock
+2026-Nov-09 08:36:22
+#14 DONE 0.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#15 copy package.json
+2026-Nov-09 08:36:22
+#15 DONE 0.3s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#16 bun install --frozen-lockfile
+2026-Nov-09 08:36:22
+#16 0.552 bun install v1.4.4 (38afee6c8)
+2026-Nov-09 08:36:22
+#16 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#17 copy /mise/installs
+2026-Nov-09 08:36:22
+#17 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 123.7 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#17 copy /mise/installs
+2026-Nov-09 08:36:22
+#17 DONE 53.9s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#18 copy /usr/local/bin/mise
+2026-Nov-09 08:36:22
+#18 DONE 10.5s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#16 bun install --frozen-lockfile
+2026-Nov-09 08:36:22
+#16 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#19 copy /etc/mise/config.toml
+2026-Nov-09 08:36:22
+#19 DONE 0.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#16 bun install --frozen-lockfile
+2026-Nov-09 08:36:22
+#16 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#20 copy /root/.local/state/mise
+2026-Nov-09 08:36:22
+#20 DONE 0.3s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#16 bun install --frozen-lockfile
+2026-Nov-09 08:36:22
+#16 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 184.9 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+2026-Nov-09 08:36:22
+#8 246.0 Ign:1 http://deb.debian.org/debian trixie InRelease
+2026-Nov-09 08:36:22
+#8 308.2 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+2026-Nov-09 08:36:22
+#8 375.4 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#16 bun install --frozen-lockfile
+2026-Nov-09 08:36:22
+#16 295.7
+2026-Nov-09 08:36:22
+#16 295.7 + @types/express@4.17.25
+2026-Nov-09 08:36:22
+#16 295.7 + @types/node@22.20.5
+2026-Nov-09 08:36:22
+#16 295.7 + @types/react@19.3.0
+2026-Nov-09 08:36:22
+#16 295.7 + @types/react-dom@19.3.0
+2026-Nov-09 08:36:22
+#16 295.7 + autoprefixer@10.6.2
+2026-Nov-09 08:36:22
+#16 295.7 + esbuild@0.25.12
+2026-Nov-09 08:36:22
+#16 295.7 + tailwindcss@4.3.3
+2026-Nov-09 08:36:22
+#16 295.7 + tsx@4.23.15
+2026-Nov-09 08:36:22
+#16 295.7 + typescript@7.0.2
+2026-Nov-09 08:36:22
+#16 295.7 + @google/genai@2.32.0
+2026-Nov-09 08:36:22
+#16 295.7 + @tailwindcss/vite@4.3.3
+2026-Nov-09 08:36:22
+#16 295.7 + @types/ws@8.18.2
+2026-Nov-09 08:36:22
+#16 295.7 + @vitejs/plugin-react@6.1.2
+2026-Nov-09 08:36:22
+#16 295.7 + dotenv@17.4.2
+2026-Nov-09 08:36:22
+#16 295.7 + express@4.22.3
+2026-Nov-09 08:36:22
+#16 295.7 + lucide-react@0.546.0
+2026-Nov-09 08:36:22
+#16 295.7 + motion@12.43.0
+2026-Nov-09 08:36:22
+#16 295.7 + react@19.3.1
+2026-Nov-09 08:36:22
+#16 295.7 + react-dom@19.3.1
+2026-Nov-09 08:36:22
+#16 295.7 + vite@8.3.5
+2026-Nov-09 08:36:22
+#16 295.7 + ws@8.22.1
+2026-Nov-09 08:36:22
+#16 295.7
+2026-Nov-09 08:36:22
+#16 295.7 181 packages installed [295.12s]
+2026-Nov-09 08:36:22
+#16 295.7
+2026-Nov-09 08:36:22
+#16 295.7 Blocked 2 postinstalls. Run `bun pm untrusted` for details.
+2026-Nov-09 08:36:22
+#16 DONE 312.9s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#21 copy / /app
+2026-Nov-09 08:36:22
+#21 DONE 0.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#22 bun run build
+2026-Nov-09 08:36:22
+#22 2.748 $ vite build
+2026-Nov-09 08:36:22
+#22 7.201 (!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+2026-Nov-09 08:36:22
+#22 7.201   - `__dirname` (vite.config.ts:11:27). Use `import.meta.dirname` instead
+2026-Nov-09 08:36:22
+#22 7.201 Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+2026-Nov-09 08:36:22
+#22 7.317 vite v8.3.5 building client environment for production...
+2026-Nov-09 08:36:22
+#22 7.399 transforming...
+2026-Nov-09 08:36:22
+#22 10.83 ✓ 1660 modules transformed.
+2026-Nov-09 08:36:22
+#22 11.41 rendering chunks...
+2026-Nov-09 08:36:22
+#22 11.74 computing gzip size...
+2026-Nov-09 08:36:22
+#22 11.76 dist/index.html                   1.59 kB │ gzip:  0.70 kB
+2026-Nov-09 08:36:22
+#22 11.76 dist/assets/index-BsUqdkrq.css   21.69 kB │ gzip:  4.96 kB
+2026-Nov-09 08:36:22
+#22 11.76 dist/assets/index-v-RwunIx.js   251.75 kB │ gzip: 76.55 kB
+2026-Nov-09 08:36:22
+#22 11.76
+2026-Nov-09 08:36:22
+#22 11.77 ✓ built in 4.43s
+2026-Nov-09 08:36:22
+#22 DONE 12.4s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 437.6 Ign:1 http://deb.debian.org/debian trixie InRelease
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#23 copy /root/.cache
+2026-Nov-09 08:36:22
+#23 DONE 0.2s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 501.7 Ign:2 http://deb.debian.org/debian trixie-updates InRelease
+2026-Nov-09 08:36:22
+#8 ...
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#24 copy /app
+2026-Nov-09 08:36:22
+#24 DONE 0.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#25 copy /app/node_modules
+2026-Nov-09 08:36:22
+#25 DONE 19.7s
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+#8 install apt packages: curl libatomic1 wget
+2026-Nov-09 08:36:22
+#8 565.9 Ign:3 http://deb.debian.org/debian-security trixie-security InRelease
+2026-Nov-09 08:36:22
+#8 630.0 Err:1 http://deb.debian.org/debian trixie InRelease
+2026-Nov-09 08:36:22
+#8 630.0   Connection failed [IP: 151.101.66.132 80]
+2026-Nov-09 08:36:22
+#8 630.0   Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+#8 630.0   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:22
+#8 690.2 Err:2 http://deb.debian.org/debian trixie-updates InRelease
+2026-Nov-09 08:36:22
+#8 690.2   Connection failed [IP: 151.101.130.132 80]
+2026-Nov-09 08:36:22
+#8 690.2   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:22
+#8 690.2   Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+#8 750.5 Err:3 http://deb.debian.org/debian-security trixie-security InRelease
+2026-Nov-09 08:36:22
+#8 750.5   Connection failed [IP: 151.101.130.132 80]
+2026-Nov-09 08:36:22
+#8 750.5   Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+#8 750.5   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:22
+#8 750.5 Reading package lists...
+2026-Nov-09 08:36:22
+#8 750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:22
+#8 750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+#8 750.7 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+#8 750.7 W: Some index files failed to download. They have been ignored, or old ones used instead.
+2026-Nov-09 08:36:22
+#8 750.9 Reading package lists...
+2026-Nov-09 08:36:22
+#8 751.0 Building dependency tree...
+2026-Nov-09 08:36:22
+#8 751.0 Reading state information...
+2026-Nov-09 08:36:22
+#8 751.1 E: Unable to locate package curl
+2026-Nov-09 08:36:22
+#8 751.1 E: Unable to locate package libatomic1
+2026-Nov-09 08:36:22
+#8 751.1 E: Unable to locate package wget
+2026-Nov-09 08:36:22
+#8 ERROR: process "sh -c apt-get update && apt-get install -y curl libatomic1 wget" did not complete successfully: exit code: 100
+2026-Nov-09 08:36:22
+------
+2026-Nov-09 08:36:22
+> install apt packages: curl libatomic1 wget:
+2026-Nov-09 08:36:22
+750.5   Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:22
+750.5 Reading package lists...
+2026-Nov-09 08:36:22
+750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie/InRelease  Connection failed [IP: 146.75.118.132 80]
+2026-Nov-09 08:36:22
+750.7 W: Failed to fetch http://deb.debian.org/debian/dists/trixie-updates/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+750.7 W: Failed to fetch http://deb.debian.org/debian-security/dists/trixie-security/InRelease  Connection failed [IP: 151.101.2.132 80]
+2026-Nov-09 08:36:22
+750.7 W: Some index files failed to download. They have been ignored, or old ones used instead.
+2026-Nov-09 08:36:22
+2026-Nov-09 08:36:22
+751.1 E: Unable to locate package curl
+2026-Nov-09 08:36:22
+751.1 E: Unable to locate package libatomic1
+2026-Nov-09 08:36:22
+751.1 E: Unable to locate package wget
+2026-Nov-09 08:36:22
+------
+2026-Nov-09 08:36:22
+ERROR: failed to build: failed to solve: process "sh -c apt-get update && apt-get install -y curl libatomic1 wget" did not complete successfully: exit code: 100
+2026-Nov-09 08:36:23
+Error type: App\Exceptions\DeploymentException
+2026-Nov-09 08:36:23
+Error code: 1
+2026-Nov-09 08:36:23
+Location: /var/www/html/app/Traits/ExecuteRemoteCommand.php:237
+2026-Nov-09 08:36:23
+========================================
+2026-Nov-09 08:36:23
+Deployment failed. Removing the new version of your application.
+2026-Nov-09 08:36:23
+[CMD]: bash -c 'if command -v timeout >/dev/null 2>&1; then output=$(timeout -k 10s 60s docker rm -f '\''6odrap6sskgau4buzitbeuke-20261109T082234'\'' 2>&1); exit_code=$?; else output='\'''\''; exit_code=124; fi; if [ "$exit_code" -eq 124 ]; then echo '\''__COOLIFY_CONTAINER_REMOVE_TIMEOUT__'\''; elif [ "$exit_code" -ne 0 ] && printf '\''%s'\'' "$output" | grep -q '\''No such container:'\''; then exit 0; elif [ "$exit_code" -ne 0 ]; then printf '\''%s\n'\'' "$output" >&2; else printf '\''%s\n'\'' "$output"; fi; exit $exit_code'
+2026-Nov-09 08:36:23
+Error response from daemon: No such container: 6odrap6sskgau4buzitbeuke-20261109T082234
+2026-Nov-09 08:36:24
+Gracefully shutting down build container: cbogeeqssbc8t0kblpur5vzh
+2026-Nov-09 08:36:28
+[CMD]: docker stop --timeout=30 'cbogeeqssbc8t0kblpur5vzh'
+2026-Nov-09 08:36:28
+cbogeeqssbc8t0kblpur5vzh
