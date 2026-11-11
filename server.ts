@@ -1,6 +1,7 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 import WebSocket from 'ws';
 
@@ -140,84 +141,71 @@ const PRIORITY_SYMBOLS = [
 ];
 
 class CTraderManager {
+  private configPath: string = path.join(process.cwd(), '.ctrader_config.json');
+  private clientId: string = process.env.CTRADER_CLIENT_ID || '';
+  private clientSecret: string = process.env.CTRADER_CLIENT_SECRET || '';
   private accessToken: string = process.env.CTRADER_ACCESS_TOKEN || '';
-  private mode: 'live_api' | 'sandbox' = process.env.CTRADER_ACCESS_TOKEN ? 'live_api' : 'sandbox';
+  private mode: 'live_api' | 'sandbox' = (process.env.CTRADER_ACCESS_TOKEN || '') ? 'live_api' : 'sandbox';
   private accounts: CTraderAccount[] = [];
   private selectedAccountId: number | null = null;
   private isLiveEnvironment: boolean = false;
   private symbols: CTraderSymbol[] = [...DEFAULT_SYMBOLS];
-  private positions: CTraderPosition[] = [
-    {
-      positionId: 78492011,
-      symbolId: 41,
-      symbolName: 'XAUUSD',
-      tradeSide: 'BUY',
-      volumeLots: 0.50,
-      volumeProtocol: lotsToProtocolVolume(0.50, DEFAULT_SYMBOLS[3]),
-      entryPrice: 2741.50,
-      stopLoss: 2732.00,
-      takeProfit: 2765.00,
-      swap: -1.45,
-      commission: -3.50,
-      comment: 'Gold breakout setup',
-      openTimestamp: Date.now() - 3600 * 1000 * 3,
-    },
-    {
-      positionId: 78492045,
-      symbolId: 1,
-      symbolName: 'EURUSD',
-      tradeSide: 'SELL',
-      volumeLots: 1.00,
-      volumeProtocol: lotsToProtocolVolume(1.00, DEFAULT_SYMBOLS[0]),
-      entryPrice: 1.08620,
-      stopLoss: 1.08950,
-      takeProfit: 1.07900,
-      swap: 0.20,
-      commission: -7.00,
-      comment: 'London session short',
-      openTimestamp: Date.now() - 3600 * 1000 * 1.5,
-    },
-  ];
-  private pendingOrders: CTraderPendingOrder[] = [
-    {
-      orderId: 99104512,
-      symbolId: 1,
-      symbolName: 'EURUSD',
-      orderType: 'LIMIT',
-      tradeSide: 'BUY',
-      volumeLots: 0.25,
-      volumeProtocol: lotsToProtocolVolume(0.25, DEFAULT_SYMBOLS[0]),
-      limitPrice: 1.08100,
-      stopPrice: null,
-      stopLoss: 1.07750,
-      takeProfit: 1.08850,
-      comment: 'Demand zone pullback',
-      openTimestamp: Date.now() - 1800 * 1000,
-    },
-    {
-      orderId: 99104589,
-      symbolId: 41,
-      symbolName: 'XAUUSD',
-      orderType: 'STOP',
-      tradeSide: 'BUY',
-      volumeLots: 0.20,
-      volumeProtocol: lotsToProtocolVolume(0.20, DEFAULT_SYMBOLS[3]),
-      limitPrice: null,
-      stopPrice: 2755.00,
-      stopLoss: 2744.00,
-      takeProfit: 2780.00,
-      comment: 'Momentum continuation',
-      openTimestamp: Date.now() - 900 * 1000,
-    },
-  ];
+  private positions: CTraderPosition[] = [];
+  private pendingOrders: CTraderPendingOrder[] = [];
   private lastError: string | null = null;
 
+  constructor() {
+    this.loadPersistedConfig();
+  }
+
+  private loadPersistedConfig() {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const raw = fs.readFileSync(this.configPath, 'utf-8');
+        const data = JSON.parse(raw);
+        if (data.clientId) this.clientId = data.clientId;
+        if (data.clientSecret) this.clientSecret = data.clientSecret;
+        if (data.accessToken) {
+          this.accessToken = data.accessToken;
+          this.mode = 'live_api';
+          // asynchronously fetch accounts once loaded
+          setTimeout(() => {
+            this.fetchAccountsFromCTrader().catch(() => {});
+          }, 500);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not read .ctrader_config.json:', e);
+    }
+  }
+
+  private persistConfig() {
+    try {
+      fs.writeFileSync(
+        this.configPath,
+        JSON.stringify(
+          {
+            clientId: this.clientId,
+            clientSecret: this.clientSecret,
+            accessToken: this.accessToken,
+          },
+          null,
+          2
+        ),
+        'utf-8'
+      );
+    } catch (e) {
+      console.warn('Could not write .ctrader_config.json:', e);
+    }
+  }
+
   public getCredentialsStatus() {
-    const clientId = process.env.CTRADER_CLIENT_ID || '';
-    const clientSecret = process.env.CTRADER_CLIENT_SECRET || '';
+    const hasClientId = Boolean(this.clientId && this.clientId !== 'MY_CTRADER_CLIENT_ID');
+    const hasClientSecret = Boolean(this.clientSecret && this.clientSecret !== 'MY_CTRADER_CLIENT_SECRET');
     return {
-      hasClientId: Boolean(clientId && clientId !== 'MY_CTRADER_CLIENT_ID'),
-      hasClientSecret: Boolean(clientSecret && clientSecret !== 'MY_CTRADER_CLIENT_SECRET'),
+      hasClientId,
+      hasClientSecret,
+      clientIdMasked: this.clientId ? (this.clientId.length > 8 ? `${this.clientId.slice(0, 4)}...${this.clientId.slice(-4)}` : this.clientId) : '',
       hasAccessToken: Boolean(this.accessToken),
       mode: this.mode,
       selectedAccountId: this.selectedAccountId || (this.mode === 'sandbox' ? 50091824 : null),
@@ -231,12 +219,35 @@ class CTraderManager {
     };
   }
 
+  public async setCredentials(params: { clientId?: string; clientSecret?: string; accessToken?: string }) {
+    if (params.clientId) this.clientId = params.clientId.trim();
+    if (params.clientSecret) this.clientSecret = params.clientSecret.trim();
+    if (params.accessToken !== undefined) {
+      this.accessToken = params.accessToken.trim();
+      if (this.accessToken) {
+        this.mode = 'live_api';
+      }
+    }
+    this.persistConfig();
+    this.lastError = null;
+
+    if (this.accessToken) {
+      await this.fetchAccountsFromCTrader();
+    }
+  }
+
   public async setAccessToken(token: string) {
     this.accessToken = token.trim();
     this.lastError = null;
+    this.persistConfig();
     if (this.accessToken) {
       this.mode = 'live_api';
-      await this.fetchAccountsFromCTrader();
+      try {
+        await this.fetchAccountsFromCTrader();
+      } catch (err: any) {
+        console.warn('[cTrader] setAccessToken initial account fetch warning:', err.message);
+        this.lastError = err.message;
+      }
     } else {
       this.mode = 'sandbox';
     }
@@ -265,16 +276,18 @@ class CTraderManager {
       sendRequest: (payloadType: number, payload: Record<string, unknown>, expectedResTypes?: number[]) => Promise<{ payloadType: number; payload: any }>
     ) => Promise<T>
   ): Promise<T> {
-    const clientId = process.env.CTRADER_CLIENT_ID;
-    const clientSecret = process.env.CTRADER_CLIENT_SECRET;
+    const clientId = this.clientId || process.env.CTRADER_CLIENT_ID;
+    const clientSecret = this.clientSecret || process.env.CTRADER_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
-      throw new Error('متغیرهای محیطی CTRADER_CLIENT_ID و CTRADER_CLIENT_SECRET تنظیم نشده‌اند.');
+      throw new Error('مقادیر Client ID و Client Secret تنظیم نشده‌اند. لطفاً از بخش تنظیمات حساب آن‌ها را وارد کنید.');
     }
 
     const endpoint = isLive ? 'wss://live.ctraderapi.com:5036' : 'wss://demo.ctraderapi.com:5036';
+    const envLabel = isLive ? 'Live' : 'Demo';
 
     return new Promise<T>((resolve, reject) => {
+      let isSettled = false;
       const ws = new WebSocket(endpoint);
       const pendingRequests = new Map<
         string,
@@ -286,9 +299,12 @@ class CTraderManager {
       >();
 
       const timeout = setTimeout(() => {
-        ws.close();
-        reject(new Error('مهلت زمانی اتصال به سرور cTrader به پایان رسید (Timeout).'));
-      }, 15000);
+        if (!isSettled) {
+          isSettled = true;
+          try { ws.close(); } catch {}
+          reject(new Error(`مهلت زمانی اتصال به سرور cTrader (${envLabel}) به پایان رسید (Timeout).`));
+        }
+      }, 35000);
 
       let msgCounter = 1;
 
@@ -298,6 +314,10 @@ class CTraderManager {
         expectedResTypes?: number[]
       ): Promise<{ payloadType: number; payload: any }> => {
         return new Promise((resReq, rejReq) => {
+          if (isSettled) {
+            rejReq(new Error('ارتباط با سرور cTrader بسته شده است.'));
+            return;
+          }
           const clientMsgId = `msg_${Date.now()}_${msgCounter++}`;
           pendingRequests.set(clientMsgId, { resolve: resReq, reject: rejReq, expectedResTypes });
           ws.send(
@@ -312,66 +332,110 @@ class CTraderManager {
 
       ws.on('message', (data: WebSocket.RawData) => {
         try {
-          const msg = JSON.parse(data.toString());
+          const rawText = data.toString();
+          const msg = JSON.parse(rawText);
           if (msg.payloadType === PAYLOAD_TYPES.HEARTBEAT_EVENT) {
             return;
           }
 
           const clientMsgId = msg.clientMsgId;
-          if (clientMsgId && pendingRequests.has(clientMsgId)) {
-            const req = pendingRequests.get(clientMsgId)!;
-            if (
-              msg.payloadType === PAYLOAD_TYPES.OA_ERROR_RES ||
-              msg.payloadType === PAYLOAD_TYPES.ORDER_ERROR_EVENT ||
-              msg.payload?.errorCode
-            ) {
+          const isError =
+            msg.payloadType === PAYLOAD_TYPES.OA_ERROR_RES ||
+            msg.payloadType === PAYLOAD_TYPES.ORDER_ERROR_EVENT ||
+            Boolean(msg.payload?.errorCode);
+
+          if (isError) {
+            const errDesc = msg.payload?.description || msg.payload?.errorCode || 'خطا از سمت سرور cTrader';
+            if (clientMsgId && pendingRequests.has(clientMsgId)) {
+              const req = pendingRequests.get(clientMsgId)!;
               pendingRequests.delete(clientMsgId);
-              const errDesc = msg.payload?.description || msg.payload?.errorCode || 'خطا از سمت سرور cTrader';
               req.reject(new Error(String(errDesc)));
               return;
             }
+            const firstEntry = pendingRequests.entries().next().value;
+            if (firstEntry) {
+              const [firstKey, req] = firstEntry;
+              pendingRequests.delete(firstKey);
+              req.reject(new Error(String(errDesc)));
+              return;
+            }
+          }
+
+          // Direct clientMsgId match
+          if (clientMsgId && pendingRequests.has(clientMsgId)) {
+            const req = pendingRequests.get(clientMsgId)!;
             pendingRequests.delete(clientMsgId);
             req.resolve({ payloadType: msg.payloadType, payload: msg.payload });
-          } else {
-            // Match by expectedResTypes if server omitted clientMsgId on ExecutionEvent
-            for (const [key, req] of pendingRequests.entries()) {
-              if (req.expectedResTypes && req.expectedResTypes.includes(msg.payloadType)) {
-                pendingRequests.delete(key);
-                if (msg.payload?.errorCode) {
-                  req.reject(new Error(`${msg.payload.errorCode}: ${msg.payload.description || ''}`));
-                } else {
-                  req.resolve({ payloadType: msg.payloadType, payload: msg.payload });
-                }
-                break;
-              }
+            return;
+          }
+
+          // Match by expectedResTypes
+          for (const [key, req] of pendingRequests.entries()) {
+            if (req.expectedResTypes && req.expectedResTypes.includes(msg.payloadType)) {
+              pendingRequests.delete(key);
+              req.resolve({ payloadType: msg.payloadType, payload: msg.payload });
+              return;
+            }
+          }
+
+          // Single in-flight request match
+          if (pendingRequests.size === 1) {
+            const onlyEntry = pendingRequests.entries().next().value;
+            if (onlyEntry) {
+              const [onlyKey, req] = onlyEntry;
+              pendingRequests.delete(onlyKey);
+              req.resolve({ payloadType: msg.payloadType, payload: msg.payload });
+              return;
             }
           }
         } catch (err) {
-          // Ignore malformed frame
+          console.warn('[cTrader WS] Parse error:', err);
         }
       });
 
       ws.on('error', (err) => {
-        clearTimeout(timeout);
-        reject(new Error(`خطای ارتباط WebSocket با cTrader: ${err.message}`));
+        if (!isSettled) {
+          isSettled = true;
+          clearTimeout(timeout);
+          reject(new Error(`خطای ارتباط WebSocket با cTrader (${envLabel}): ${err.message}`));
+        }
+      });
+
+      ws.on('close', (code) => {
+        if (!isSettled && pendingRequests.size > 0) {
+          for (const [key, req] of pendingRequests.entries()) {
+            pendingRequests.delete(key);
+            req.reject(new Error(`ارتباط با سرور cTrader قطع شد (کد ${code}).`));
+          }
+        }
       });
 
       ws.on('open', async () => {
         try {
           // Step 1: Authenticate Application (2100 -> 2101)
-          await sendRequest(PAYLOAD_TYPES.APPLICATION_AUTH_REQ, {
-            clientId,
-            clientSecret,
-          });
+          await sendRequest(
+            PAYLOAD_TYPES.APPLICATION_AUTH_REQ,
+            {
+              clientId,
+              clientSecret,
+            },
+            [PAYLOAD_TYPES.APPLICATION_AUTH_RES, PAYLOAD_TYPES.OA_ERROR_RES]
+          );
 
           const result = await handler(sendRequest);
-          clearTimeout(timeout);
-          ws.close();
-          resolve(result);
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timeout);
+            try { ws.close(); } catch {}
+            resolve(result);
+          }
         } catch (err: any) {
-          clearTimeout(timeout);
-          ws.close();
-          reject(err);
+          if (!isSettled) {
+            isSettled = true;
+            clearTimeout(timeout);
+            try { ws.close(); } catch {}
+            reject(err);
+          }
         }
       });
     });
@@ -382,55 +446,74 @@ class CTraderManager {
       throw new Error('توکن دسترسی (Access Token) وارد نشده است.');
     }
 
-    try {
-      // First try live server endpoint, if it fails or returns 0 accounts, try demo
-      let accounts: CTraderAccount[] = [];
-      try {
-        accounts = await this.executeWithWebSocket(true, async (sendRequest) => {
-          const res = await sendRequest(PAYLOAD_TYPES.GET_ACCOUNTS_BY_TOKEN_REQ, {
-            accessToken: this.accessToken,
-          });
-          const list = res.payload?.ctidTraderAccount || [];
-          return list.map((acc: any) => ({
-            ctidTraderAccountId: Number(acc.ctidTraderAccountId),
-            isLive: Boolean(acc.isLive),
-            traderLogin: Number(acc.traderLogin || acc.ctidTraderAccountId),
-            brokerTitleShort: acc.brokerTitleShort || (acc.isLive ? 'cTrader Live' : 'cTrader Demo'),
-          }));
-        });
-      } catch {
-        // Fallback to demo endpoint
-        accounts = await this.executeWithWebSocket(false, async (sendRequest) => {
-          const res = await sendRequest(PAYLOAD_TYPES.GET_ACCOUNTS_BY_TOKEN_REQ, {
-            accessToken: this.accessToken,
-          });
-          const list = res.payload?.ctidTraderAccount || [];
-          return list.map((acc: any) => ({
-            ctidTraderAccountId: Number(acc.ctidTraderAccountId),
-            isLive: Boolean(acc.isLive),
-            traderLogin: Number(acc.traderLogin || acc.ctidTraderAccountId),
-            brokerTitleShort: acc.brokerTitleShort || (acc.isLive ? 'cTrader Live' : 'cTrader Demo'),
-          }));
-        });
-      }
+    let accounts: CTraderAccount[] = [];
+    let lastError: Error | null = null;
 
+    // 1. Try Live endpoint
+    try {
+      accounts = await this.executeWithWebSocket(true, async (sendRequest) => {
+        const res = await sendRequest(
+          PAYLOAD_TYPES.GET_ACCOUNTS_BY_TOKEN_REQ,
+          { accessToken: this.accessToken },
+          [PAYLOAD_TYPES.GET_ACCOUNTS_BY_TOKEN_RES, PAYLOAD_TYPES.OA_ERROR_RES]
+        );
+        const list = res.payload?.ctidTraderAccount || [];
+        return list.map((acc: any) => ({
+          ctidTraderAccountId: Number(acc.ctidTraderAccountId),
+          isLive: Boolean(acc.isLive),
+          traderLogin: Number(acc.traderLogin || acc.ctidTraderAccountId),
+          brokerTitleShort: acc.brokerTitleShort || (acc.isLive ? 'cTrader Live' : 'cTrader Demo'),
+        }));
+      });
+    } catch (err: any) {
+      console.warn('[cTrader] Live endpoint account query error:', err.message);
+      lastError = err;
+    }
+
+    // 2. If no accounts on Live or error, try Demo endpoint
+    if (accounts.length === 0) {
+      try {
+        accounts = await this.executeWithWebSocket(false, async (sendRequest) => {
+          const res = await sendRequest(
+            PAYLOAD_TYPES.GET_ACCOUNTS_BY_TOKEN_REQ,
+            { accessToken: this.accessToken },
+            [PAYLOAD_TYPES.GET_ACCOUNTS_BY_TOKEN_RES, PAYLOAD_TYPES.OA_ERROR_RES]
+          );
+          const list = res.payload?.ctidTraderAccount || [];
+          return list.map((acc: any) => ({
+            ctidTraderAccountId: Number(acc.ctidTraderAccountId),
+            isLive: Boolean(acc.isLive),
+            traderLogin: Number(acc.traderLogin || acc.ctidTraderAccountId),
+            brokerTitleShort: acc.brokerTitleShort || (acc.isLive ? 'cTrader Live' : 'cTrader Demo'),
+          }));
+        });
+      } catch (err: any) {
+        console.warn('[cTrader] Demo endpoint account query error:', err.message);
+        if (!lastError) lastError = err;
+      }
+    }
+
+    if (accounts.length > 0) {
       this.accounts = accounts;
-      if (accounts.length > 0) {
-        if (!this.selectedAccountId || !accounts.some((a) => a.ctidTraderAccountId === this.selectedAccountId)) {
-          this.selectedAccountId = accounts[0].ctidTraderAccountId;
-          this.isLiveEnvironment = accounts[0].isLive;
-        } else {
-          const cur = accounts.find((a) => a.ctidTraderAccountId === this.selectedAccountId);
-          if (cur) this.isLiveEnvironment = cur.isLive;
-        }
-        await this.reconcileAccount();
+      if (!this.selectedAccountId || !accounts.some((a) => a.ctidTraderAccountId === this.selectedAccountId)) {
+        this.selectedAccountId = accounts[0].ctidTraderAccountId;
+        this.isLiveEnvironment = accounts[0].isLive;
+      } else {
+        const cur = accounts.find((a) => a.ctidTraderAccountId === this.selectedAccountId);
+        if (cur) this.isLiveEnvironment = cur.isLive;
       }
       this.lastError = null;
-      return accounts;
-    } catch (err: any) {
-      this.lastError = err.message;
-      throw err;
+
+      // Start reconcile asynchronously in background so we never block callers
+      this.reconcileAccount().catch((e) => {
+        console.warn('[cTrader] Background reconcile after account fetch:', e.message);
+      });
+    } else if (lastError) {
+      this.lastError = lastError.message;
+      console.warn('[cTrader] Account list not retrieved:', lastError.message);
     }
+
+    return this.accounts;
   }
 
   public async reconcileAccount() {
@@ -966,15 +1049,18 @@ async function startServer() {
 
   // 1. OAuth Authorization URL endpoint
   app.get('/api/auth/url', (req, res) => {
-    const clientId = process.env.CTRADER_CLIENT_ID;
+    const creds = ctraderManager.getCredentialsStatus();
+    const clientId = (ctraderManager as any).clientId || process.env.CTRADER_CLIENT_ID;
     if (!clientId) {
       res.status(400).json({
-        error: 'متغیر محیطی CTRADER_CLIENT_ID در تنظیمات پروژه تعریف نشده است.',
+        error: 'مقدار Client ID در تنظیمات برنامه یا متغیرهای محیطی تعریف نشده است. لطفاً در بخش تنظیمات حساب آن را وارد کنید.',
       });
       return;
     }
 
-    const baseAppUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+    const forwardedHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
+    const baseAppUrl = (process.env.APP_URL || `${forwardedProto}://${forwardedHost}`).replace(/\/$/, '');
     const redirectUri = (req.query.redirect_uri as string) || `${baseAppUrl}/auth/callback`;
 
     const params = new URLSearchParams({
@@ -988,6 +1074,17 @@ async function startServer() {
     res.json({ url: authUrl, redirectUri });
   });
 
+  // Save Credentials (Client ID, Secret, and optional Access Token) directly from UI
+  app.post('/api/ctrader/credentials', async (req, res) => {
+    try {
+      const { clientId, clientSecret, accessToken } = req.body;
+      await ctraderManager.setCredentials({ clientId, clientSecret, accessToken });
+      res.json(ctraderManager.getStateSnapshot());
+    } catch (err: any) {
+      res.status(400).json({ error: err.message, state: ctraderManager.getStateSnapshot() });
+    }
+  });
+
   // 2. OAuth Callback Handler (Popup postMessage flow)
   app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
     const code = req.query.code as string | undefined;
@@ -999,8 +1096,8 @@ async function startServer() {
         <html lang="fa" dir="rtl">
           <head><meta charset="utf-8"><title>خطا در احراز هویت cTrader</title></head>
           <body style="font-family: sans-serif; background: #020617; color: #f8fafc; padding: 2rem; text-align: center;">
-            <h3>خطا در اتصال به cTrader</h3>
-            <p>${errorDesc || 'کد احراز هویت دریافت نشد.'}</p>
+            <h3 style="color: #f87171;">خطا در اتصال به cTrader</h3>
+            <p>${errorDesc || 'کد احراز هویت از سرور cTrader دریافت نشد.'}</p>
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(errorDesc || 'No code')} }, '*');
@@ -1013,9 +1110,11 @@ async function startServer() {
     }
 
     try {
-      const clientId = process.env.CTRADER_CLIENT_ID || '';
-      const clientSecret = process.env.CTRADER_CLIENT_SECRET || '';
-      const baseAppUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+      const clientId = (ctraderManager as any).clientId || process.env.CTRADER_CLIENT_ID || '';
+      const clientSecret = (ctraderManager as any).clientSecret || process.env.CTRADER_CLIENT_SECRET || '';
+      const forwardedProto = (req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+      const forwardedHost = req.get('x-forwarded-host') || req.get('host') || 'localhost:3000';
+      const baseAppUrl = (process.env.APP_URL || `${forwardedProto}://${forwardedHost}`).replace(/\/$/, '');
       const redirectUri = `${baseAppUrl}/auth/callback`;
 
       const tokenParams = new URLSearchParams({
@@ -1038,34 +1137,58 @@ async function startServer() {
         throw new Error(tokenData.description || tokenData.error_description || 'توکن دسترسی از cTrader دریافت نشد.');
       }
 
+      // Persist access token immediately
       await ctraderManager.setAccessToken(accessToken);
 
       res.send(`
         <!doctype html>
         <html lang="fa" dir="rtl">
-          <head><meta charset="utf-8"><title>اتصال موفق به cTrader</title></head>
-          <body style="font-family: sans-serif; background: #020617; color: #f8fafc; padding: 2rem; text-align: center;">
-            <h3>اتصال به اکانت cTrader با موفقیت انجام شد.</h3>
-            <p>این پنجره به صورت خودکار بسته می‌شود...</p>
+          <head>
+            <meta charset="utf-8">
+            <title>اتصال موفق به cTrader</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+          </head>
+          <body style="font-family: system-ui, sans-serif; background: #020617; color: #f8fafc; padding: 2.5rem 1.5rem; text-align: center;">
+            <div style="max-width: 420px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 2rem;">
+              <h3 style="margin: 0 0 0.5rem; color: #34d399; font-size: 1.15rem;">اتصال به cTrader با موفقیت انجام شد</h3>
+              <p style="color: #94a3b8; font-size: 0.85rem; margin: 0 0 1.5rem;">توکن پروداکشن دریافت و در سرور ذخیره شد. پنجره در حال بسته شدن است...</p>
+              <button onclick="closeNow()" style="background: #2563eb; color: #fff; border: none; padding: 0.5rem 1.25rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">بستن پنجره</button>
+            </div>
             <script>
-              if (window.opener) {
-                window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-                window.close();
-              } else {
-                window.location.href = '/';
+              function closeNow() {
+                try {
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
+                    window.close();
+                  } else {
+                    window.location.href = '/';
+                  }
+                } catch {
+                  window.location.href = '/';
+                }
               }
+              closeNow();
+              setTimeout(closeNow, 800);
             </script>
           </body>
         </html>
       `);
     } catch (err: any) {
+      console.error('[cTrader OAuth Error]', err.message);
       res.send(`
         <!doctype html>
         <html lang="fa" dir="rtl">
-          <head><meta charset="utf-8"><title>خطا در دریافت توکن cTrader</title></head>
-          <body style="font-family: sans-serif; background: #020617; color: #f8fafc; padding: 2rem; text-align: center;">
-            <h3>خطا در تبادل توکن با cTrader</h3>
-            <p>${err.message}</p>
+          <head>
+            <meta charset="utf-8">
+            <title>خطا در دریافت توکن cTrader</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+          </head>
+          <body style="font-family: system-ui, sans-serif; background: #020617; color: #f8fafc; padding: 2.5rem 1.5rem; text-align: center;">
+            <div style="max-width: 420px; margin: 0 auto; background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; padding: 2rem;">
+              <h3 style="color: #f87171; margin: 0 0 0.5rem; font-size: 1.1rem;">خطا در تبادل توکن با cTrader</h3>
+              <p style="color: #cbd5e1; font-size: 0.85rem; margin: 0 0 1.5rem;">${err.message}</p>
+              <button onclick="window.close()" style="background: #334155; color: #fff; border: none; padding: 0.5rem 1.25rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer;">بستن پنجره</button>
+            </div>
             <script>
               if (window.opener) {
                 window.opener.postMessage({ type: 'OAUTH_AUTH_ERROR', error: ${JSON.stringify(err.message)} }, '*');

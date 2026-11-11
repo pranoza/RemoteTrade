@@ -71,6 +71,7 @@ interface CTraderPendingOrder {
 interface CredentialsStatus {
   hasClientId: boolean;
   hasClientSecret: boolean;
+  clientIdMasked?: string;
   hasAccessToken: boolean;
   mode: 'live_api' | 'sandbox';
   selectedAccountId: number | null;
@@ -94,11 +95,43 @@ export default function App() {
 
   // Connection settings modal
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
+  const [inputClientId, setInputClientId] = useState<string>('');
+  const [inputClientSecret, setInputClientSecret] = useState<string>('');
   const [manualToken, setManualToken] = useState<string>('');
   const [copiedCallback, setCopiedCallback] = useState<boolean>(false);
 
   // Feedback banner
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleSaveCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSyncing(true);
+    try {
+      const res = await fetch('/api/ctrader/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientId: inputClientId.trim() || undefined,
+          clientSecret: inputClientSecret.trim() || undefined,
+          accessToken: manualToken.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطا در ذخیره اطلاعات');
+      setStatus(data.status);
+      setSymbols(data.symbols || []);
+      setPositions(data.positions || []);
+      setPendingOrders(data.pendingOrders || []);
+      showFeedback('success', 'اطلاعات با موفقیت ذخیره شد.');
+      if (manualToken.trim()) {
+        setShowSettingsModal(false);
+      }
+    } catch (err: any) {
+      showFeedback('error', err.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Unified Order / Edit Form State
   const [formMode, setFormMode] = useState<'new' | 'edit'>('new');
@@ -155,7 +188,7 @@ export default function App() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+      if (origin !== window.location.origin && !origin.endsWith('.run.app') && !origin.includes('localhost')) {
         return;
       }
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
@@ -536,6 +569,25 @@ export default function App() {
           </div>
           <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-white">
             <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Setup Guide Banner when credentials are empty */}
+      {status && (!status.hasClientId || !status.hasClientSecret) && (
+        <div className="bg-blue-950/40 border-b border-blue-900/60 px-6 py-3 flex flex-wrap items-center justify-between gap-3 text-xs text-blue-200">
+          <div className="flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-blue-400 shrink-0" />
+            <span>
+              <strong>راهنمای اتصال:</strong> نیازی به تعریف متغیر در کولیفای نیست! مشخصات cTrader خود را می‌توانید مستقیماً از بخش «تنظیمات حساب» ذخیره کنید.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSettingsModal(true)}
+            className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium text-xs transition-colors shrink-0"
+          >
+            ورود اطلاعات و اتصال
           </button>
         </div>
       )}
@@ -1017,21 +1069,76 @@ export default function App() {
               </button>
             </div>
 
-            {/* Direct OAuth Button */}
+            {/* Dynamic Credentials Form */}
+            <form onSubmit={handleSaveCredentials} className="bg-slate-950 border border-slate-800 p-4 rounded-lg space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-900">
+                <h4 className="text-xs font-bold text-white">تنظیم مستقیم کلیدهای cTrader</h4>
+                <span className="text-[10px] text-slate-500">ذخیره خودکار روی سرور بدون نیاز به کولیفای</span>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Client ID</label>
+                  <input
+                    type="text"
+                    value={inputClientId}
+                    onChange={(e) => setInputClientId(e.target.value)}
+                    placeholder={status?.clientIdMasked ? `فعلی: ${status.clientIdMasked}` : 'Client ID از پنل cTrader'}
+                    dir="ltr"
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Client Secret</label>
+                  <input
+                    type="password"
+                    value={inputClientSecret}
+                    onChange={(e) => setInputClientSecret(e.target.value)}
+                    placeholder={status?.hasClientSecret ? '•••••••••••••••• (تنظیم شده)' : 'Client Secret از پنل cTrader'}
+                    dir="ltr"
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Access Token (اختیاری جهت اتصال فوری بدون OAuth)</label>
+                  <input
+                    type="password"
+                    value={manualToken}
+                    onChange={(e) => setManualToken(e.target.value)}
+                    placeholder={status?.hasAccessToken ? '•••••••••••••••• (توکن فعال است)' : 'Access Token پروداکشن'}
+                    dir="ltr"
+                    className="w-full bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs font-mono text-slate-100 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={syncing}
+                className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded transition-colors disabled:opacity-50"
+              >
+                ذخیره اطلاعات و اتصال
+              </button>
+            </form>
+
+            {/* Direct OAuth Section */}
             <div className="bg-slate-950 border border-slate-800 p-4 rounded-lg space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-white">ورود خودکار با حساب cTrader ID</h4>
+                  <h4 className="text-xs font-bold text-white">یا ورود خودکار با cTrader OAuth</h4>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    اتصال سریع از طریق فرم رسمی ورود cTrader و دسترسی معامله
+                    پس از ذخیره Client ID و Secret، مستقیماً لاگین کنید
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleConnectOAuth}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold transition-colors flex items-center gap-1.5"
+                  disabled={!status?.hasClientId}
+                  className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs font-semibold transition-colors flex items-center gap-1.5 disabled:opacity-40"
                 >
-                  <span>ورود به حساب</span>
+                  <span>ورود با cTrader</span>
                   <ExternalLink className="w-3 h-3" />
                 </button>
               </div>
@@ -1059,30 +1166,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-
-            {/* Manual Token Option */}
-            <form onSubmit={handleConnectToken} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  یا وارد کردن مستقیم Access Token پروداکشن
-                </label>
-                <input
-                  type="password"
-                  value={manualToken}
-                  onChange={(e) => setManualToken(e.target.value)}
-                  placeholder="توکن دسترسی cTrader..."
-                  dir="ltr"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-100 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={syncing}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-lg transition-colors disabled:opacity-50"
-              >
-                ذخیره و اتصال با توکن
-              </button>
-            </form>
           </div>
         </div>
       )}
