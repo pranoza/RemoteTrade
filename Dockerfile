@@ -16,6 +16,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV CTRADER_CLIENT_ID=""
+ENV CTRADER_CLIENT_SECRET=""
+ENV CTRADER_ACCESS_TOKEN=""
 
 COPY package*.json ./
 RUN npm install --omit=dev --legacy-peer-deps
